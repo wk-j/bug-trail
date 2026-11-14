@@ -38,8 +38,11 @@ func minimal() map[string]any {
 	      {"id": "s2", "component": "fs", "title": "Name cut mid-codepoint", "role": "origin",
 	       "location": {"path": "fs/name.go", "line": 12, "url": "https://github.com/o/r/blob/abc/fs/name.go#L12"},
 	       "fix": {"label": "PR #2", "url": "https://github.com/o/r/pull/2"}},
-	      {"id": "s3", "component": "ui", "title": "Crash dialog", "role": "symptom", "location": {"path": "ui/save.go"}}
+	      {"id": "s3", "component": "ui", "title": "Crash dialog", "role": "symptom", "path": "bug", "location": {"path": "ui/save.go"}},
+	      {"id": "ok", "component": "ui", "title": "File saved", "path": "correct"}
 	    ],
+	    "cases": [{"id": "emoji", "title": "Name with an emoji", "input": {"name": "🙂.txt"},
+	      "correct": ["s1", "ok"], "bug": ["s1", "s2", "s3"], "should": "Saved", "does": "Crashes"}],
 	    "edges": [{"from": "s1", "to": "s2", "kind": "call"}, {"from": "s2", "to": "s3", "kind": "error"}]
 	  },
 	  "nodes": [
@@ -55,6 +58,10 @@ func minimal() map[string]any {
 func flow(m map[string]any) map[string]any { return m["flow"].(map[string]any) }
 func step(m map[string]any, i int) map[string]any {
 	return flow(m)["steps"].([]any)[i].(map[string]any)
+}
+
+func kase(m map[string]any) map[string]any {
+	return flow(m)["cases"].([]any)[0].(map[string]any)
 }
 
 func TestValidate(t *testing.T) {
@@ -81,6 +88,12 @@ func TestValidate(t *testing.T) {
 		{"location without path", func(m map[string]any) { step(m, 1)["location"] = map[string]any{"line": 3.0} }, "location needs a path"},
 		{"fix without label", func(m map[string]any) { step(m, 1)["fix"] = map[string]any{} }, "fix needs a label"},
 		{"alongside a later step", func(m map[string]any) { step(m, 0)["alongside"] = "s3" }, "earlier step"},
+		{"bad path", func(m map[string]any) { step(m, 0)["path"] = "maybe" }, "path must be"},
+		{"bug role on correct path", func(m map[string]any) { step(m, 3)["role"] = "origin" }, "role can't be"},
+		{"case without outcome", func(m map[string]any) { delete(kase(m), "does") }, "does is required"},
+		{"case uses unknown step", func(m map[string]any) { kase(m)["bug"] = []any{"s1", "zz"} }, `unknown step "zz"`},
+		{"correct route through bug step", func(m map[string]any) { kase(m)["correct"] = []any{"s1", "s3"} }, "bug-only step"},
+		{"bug route through correct step", func(m map[string]any) { kase(m)["bug"] = []any{"s1", "ok"} }, "correct-only step"},
 		{"flow edge to nowhere", func(m map[string]any) { flow(m)["edges"].([]any)[0].(map[string]any)["to"] = "s9" }, `to "s9"`},
 	}
 	for _, c := range cases {
@@ -116,8 +129,10 @@ func TestFlowWarnings(t *testing.T) {
 	step(m, 1)["role"] = "normal"
 	delete(step(m, 2), "location")
 	step(m, 2)["role"] = "propagates"
+	flow(m)["steps"] = flow(m)["steps"].([]any)[:3]
+	delete(flow(m), "cases")
 	all := strings.Join(Validate(m).Warnings, "\n")
-	for _, w := range []string{`role "origin"`, `role "symptom"`, `"s3" is on the bug path but has no code location`} {
+	for _, w := range []string{`role "origin"`, `role "symptom"`, `"s3" is on the bug path but has no code location`, `path "correct"`} {
 		if !strings.Contains(all, w) {
 			t.Errorf("missing warning %q in %s", w, all)
 		}

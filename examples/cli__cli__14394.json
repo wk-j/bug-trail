@@ -31,25 +31,29 @@
         "id": "pr",
         "name": "gh pr list",
         "detail": "cli/cli pkg/cmd/pr/list, internal/ghcmd",
-        "kind": "app"
+        "kind": "app",
+        "group": "cli/cli"
       },
       {
         "id": "fd",
         "name": "featuredetection",
         "detail": "cli/cli internal/featuredetection",
-        "kind": "library"
+        "kind": "library",
+        "group": "cli/cli"
       },
       {
         "id": "gogh",
         "name": "go-gh pkg/api",
         "detail": "cli/go-gh v2.16.0 cache.go",
-        "kind": "library"
+        "kind": "library",
+        "group": "cli/go-gh"
       },
       {
         "id": "gql",
         "name": "shurcooL-graphql",
         "detail": "cli/shurcooL-graphql v0.0.4",
-        "kind": "library"
+        "kind": "library",
+        "group": "shurcooL-graphql"
       },
       {
         "id": "disk",
@@ -86,7 +90,8 @@
             "label": "api/http_client.go#L135-L151",
             "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/api/http_client.go#L135-L151"
           }
-        ]
+        ],
+        "path": "both"
       },
       {
         "id": "search",
@@ -105,7 +110,8 @@
             "label": "http.go#L37-L40",
             "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/pkg/cmd/pr/list/http.go#L37-L40"
           }
-        ]
+        ],
+        "path": "both"
       },
       {
         "id": "detect",
@@ -128,7 +134,8 @@
             "label": "api/client.go#L134-L142",
             "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/api/client.go#L134-L142"
           }
-        ]
+        ],
+        "path": "both"
       },
       {
         "id": "miss",
@@ -147,7 +154,39 @@
             "label": "L55-L73",
             "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L55-L73"
           }
+        ],
+        "path": "both"
+      },
+      {
+        "id": "c-store",
+        "component": "gogh",
+        "path": "correct",
+        "title": "Entry written to a temp file, then renamed into place",
+        "detail": "What go-gh #263 changes: a reader sees either the old entry or the new one, never a mix of two writes.",
+        "refs": [
+          {
+            "label": "go-gh #263",
+            "url": "https://github.com/cli/go-gh/pull/263"
+          }
         ]
+      },
+      {
+        "id": "c-read",
+        "component": "gogh",
+        "path": "correct",
+        "title": "Later run reads a complete entry"
+      },
+      {
+        "id": "c-decode",
+        "component": "gql",
+        "path": "correct",
+        "title": "JSON decodes"
+      },
+      {
+        "id": "c-ok",
+        "component": "pr",
+        "path": "correct",
+        "title": "gh pr list prints the pull requests"
       },
       {
         "id": "store",
@@ -180,7 +219,8 @@
             "label": "L75-L81",
             "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L75-L81"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "other",
@@ -201,7 +241,8 @@
             "label": "maintainer comment on parallel gh",
             "url": "https://github.com/cli/cli/issues/14394#issuecomment-5595893491"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "file",
@@ -229,7 +270,8 @@
             "label": "http_client.go#L79-L86",
             "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/http_client.go#L79-L86"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "read",
@@ -253,7 +295,8 @@
             "label": "L106-L108",
             "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L106-L108"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "decode",
@@ -273,7 +316,8 @@
             "label": "graphql_client.go#L152-L169",
             "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/graphql_client.go#L152-L169"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "bubble",
@@ -301,7 +345,8 @@
             "label": "list.go#L199-L202",
             "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/pkg/cmd/pr/list/list.go#L199-L202"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "print",
@@ -329,7 +374,8 @@
             "label": "cmd.go#L195-L226",
             "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/internal/ghcmd/cmd.go#L195-L226"
           }
-        ]
+        ],
+        "path": "bug"
       }
     ],
     "edges": [
@@ -392,6 +438,58 @@
         "to": "print",
         "kind": "error",
         "label": "returned by listRun"
+      },
+      {
+        "from": "miss",
+        "to": "c-store",
+        "kind": "call"
+      },
+      {
+        "from": "c-store",
+        "to": "c-read",
+        "kind": "data",
+        "label": "next run"
+      },
+      {
+        "from": "c-read",
+        "to": "c-decode",
+        "kind": "return"
+      },
+      {
+        "from": "c-decode",
+        "to": "c-ok",
+        "kind": "return"
+      }
+    ],
+    "cases": [
+      {
+        "id": "parallel",
+        "title": "Two gh processes write the same cache entry",
+        "correct": [
+          "run",
+          "search",
+          "detect",
+          "miss",
+          "c-store",
+          "c-read",
+          "c-decode",
+          "c-ok"
+        ],
+        "bug": [
+          "run",
+          "search",
+          "detect",
+          "miss",
+          "store",
+          "other",
+          "file",
+          "read",
+          "decode",
+          "bubble",
+          "print"
+        ],
+        "should": "Each write lands whole; the next run decodes the cached body",
+        "does": "The writes interleave; the next run fails with `invalid character 'd' after object key`"
       }
     ]
   },

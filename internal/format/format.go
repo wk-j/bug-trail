@@ -27,7 +27,10 @@ var (
 	// BugRoles are the roles on the bug's path, origin to symptom.
 	BugRoles       = []string{"origin", "propagates", "symptom"}
 	ComponentKinds = []string{"app", "library", "service", "storage", "external", "process"}
-	FlowEdgeKinds  = []string{"call", "data", "return", "error", "concurrent"}
+	// StepPaths say which flow a step belongs to: both, only the correct logic, or only
+	// what the buggy code does. The map draws correct and bug steps in separate bands.
+	StepPaths     = []string{"both", "correct", "bug"}
+	FlowEdgeKinds = []string{"call", "data", "return", "error", "concurrent"}
 )
 
 type Lane struct {
@@ -350,6 +353,71 @@ func Validate(v any) Result {
 	return r
 }
 
+// validateCases checks the concrete inputs: each names the steps the correct logic
+// takes and the steps the current code takes for that input.
+func validateCases(v any, stepIDs map[string]bool, stepPath map[string]string, errf, warnf func(string, ...any)) {
+	if v == nil {
+		return
+	}
+	cases, ok := v.([]any)
+	if !ok {
+		errf("flow.cases must be an array")
+		return
+	}
+	seen := map[string]bool{}
+	for k, cv := range cases {
+		at := fmt.Sprintf("flow.cases[%d]", k)
+		c, ok := cv.(map[string]any)
+		if !ok {
+			errf("%s must be an object", at)
+			continue
+		}
+		id, _ := c["id"].(string)
+		if !isStr(id) {
+			errf("%s.id is required", at)
+		} else if seen[id] {
+			errf("%s.id %q is duplicated", at, id)
+		}
+		seen[id] = true
+		if !isStr(c["title"]) {
+			errf("%s.title is required", at)
+		}
+		for _, f := range []string{"should", "does"} {
+			if !isStr(c[f]) {
+				errf("%s.%s is required: the outcome in one sentence", at, f)
+			}
+		}
+		if c["works"] != nil {
+			if _, ok := c["works"].(bool); !ok {
+				errf("%s.works must be true or false", at)
+			}
+		}
+		if c["input"] != nil {
+			if _, ok := c["input"].(map[string]any); !ok {
+				errf("%s.input must be an object of field: value", at)
+			}
+		}
+		for _, route := range []string{"correct", "bug"} {
+			ids, ok := c[route].([]any)
+			if !ok || len(ids) == 0 {
+				errf("%s.%s must list the step ids this input goes through", at, route)
+				continue
+			}
+			for _, sv := range ids {
+				sid, _ := sv.(string)
+				switch {
+				case !stepIDs[sid]:
+					errf("%s.%s names unknown step %q", at, route, str(sv))
+				case route == "correct" && stepPath[sid] == "bug":
+					errf("%s.correct includes %q, which is a bug-only step", at, sid)
+				case route == "bug" && stepPath[sid] == "correct":
+					errf("%s.bug includes %q, which is a correct-only step", at, sid)
+				}
+			}
+		}
+	}
+}
+
 func validateRefs(at string, v any, errf func(string, ...any)) int {
 	if v == nil {
 		return 0
@@ -408,12 +476,16 @@ func validateFlow(v any, errf, warnf func(string, ...any)) {
 		if !isStr(c["name"]) {
 			errf("%s.name is required", at)
 		}
+		if c["group"] != nil && !isStr(c["group"]) {
+			errf("%s.group must be a string (the module or repo the component belongs to)", at)
+		}
 		if c["kind"] != nil && !oneOf(c["kind"], ComponentKinds) {
 			errf("%s.kind must be one of: %s", at, list(ComponentKinds))
 		}
 	}
 
 	stepIDs := map[string]bool{}
+	stepPath := map[string]string{}
 	roles := map[string]int{}
 	steps, ok := f["steps"].([]any)
 	if !ok || len(steps) < 2 {
@@ -449,6 +521,20 @@ func validateFlow(v any, errf, warnf func(string, ...any)) {
 			}
 		}
 		roles[role]++
+		path := "both"
+		if s["path"] != nil {
+			if !oneOf(s["path"], StepPaths) {
+				errf("%s.path must be one of: %s", at, list(StepPaths))
+			} else {
+				path = s["path"].(string)
+			}
+		}
+		if path == "correct" && slices.Contains(BugRoles, role) {
+			errf("%s is on the correct path, so its role can't be %q", at, role)
+		}
+		if isStr(id) {
+			stepPath[id] = path
+		}
 		if s["location"] != nil {
 			loc, ok := s["location"].(map[string]any)
 			if !ok || !isStr(loc["path"]) {
@@ -509,6 +595,20 @@ func validateFlow(v any, errf, warnf func(string, ...any)) {
 		}
 	}
 
+	hasCorrect := false
+	for _, p := range stepPath {
+		if p == "correct" {
+			hasCorrect = true
+		}
+	}
+	validateCases(f["cases"], stepIDs, stepPath, errf, warnf)
+	if len(steps) >= 2 && !hasCorrect {
+		warnf(`no flow step has path "correct"; add the correct logic so the map can show it next to the bug`)
+	}
+	if hasCorrect && f["cases"] == nil {
+		warnf("flow.cases is missing; add concrete inputs and the route each one takes")
+	}
+
 	if len(steps) >= 2 {
 		if roles["origin"] == 0 {
 			warnf(`no flow step has role "origin"; mark the step where the bug starts`)
@@ -533,5 +633,6 @@ export const TRAIL_STATUS = %s;
 export const SEVERITY = %s;
 export const STEP_ROLES = %s;
 export const BUG_ROLES = %s;
-`, j(Format), j(Lanes), j(KindLane), j(KindLabel), j(NodeStatus), j(Relations), j(TrailStatus), j(Severity), j(StepRoles), j(BugRoles)))
+export const STEP_PATHS = %s;
+`, j(Format), j(Lanes), j(KindLane), j(KindLabel), j(NodeStatus), j(Relations), j(TrailStatus), j(Severity), j(StepRoles), j(BugRoles), j(StepPaths)))
 }

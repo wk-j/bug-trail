@@ -101,6 +101,16 @@ Follow [FORMAT.md](FORMAT.md). The rules that matter most:
   in the title.
 - **Mark the bug path.** Exactly one `origin`, then `propagates` steps, then one `symptom`
   (more than one only if the issue reports separate symptoms). Steps before the bug are `normal`.
+- **Write the correct flow too.** The map shows both flows in one graph, so the reader learns
+  what *should* happen. Steps both flows share get `path: "both"`. From where they split, add
+  the steps the correct logic takes (`path: "correct"`), taken from the spec, the reference
+  implementation, the fix diff or the issue, and mark the buggy steps `path: "bug"`. Ground the
+  correct steps the same way as the bug steps, and cite the source in `refs` or `detail`.
+- **Add cases (2–5).** Each is a concrete input from the issue, its tests or its examples, with
+  the steps it takes in each flow, plus `should` and `does` in one sentence each. Include a case
+  that already works (`works: true`) if there is one.
+- **End at the outcome.** Make the place the data ends up its own component on the right (a
+  queue, an upload, a response), and set `group` on components to their module or repo.
 - **Show the code.** Give the origin step a `snippet` of 3–12 lines, copied exactly from the
   file at that commit, and do the same for any step where the code explains the bug.
 - **Attach the fix** to the step it changes, with `fix: {label, url, detail}`. If the bug is

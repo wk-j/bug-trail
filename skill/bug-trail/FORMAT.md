@@ -60,20 +60,32 @@ required. Optional: `author`, `created_at`, `closed_at`, `labels` (string[]), `a
 }
 ```
 
-**Components** are the map's columns, left to right in the order you list them.
+The map draws **both flows in one graph**: what the code should do (`path: "correct"`) and what
+it does now (`path: "bug"`), from the steps they share (`path: "both"`, the default) up to where
+they split. **Cases** are concrete inputs; picking one lights up the route it takes through each
+flow.
+
+**Components** are the boxes on the map. They are placed left to right in call order and grouped
+into containers by `group`.
 
 | Field    | Notes |
 |----------|-------|
 | `id`     | Unique. |
 | `name`   | As the codebase names it: "gh CLI", "go-gh pkg/api", "Postgres". |
 | `detail` | Optional short label under the name: a repo, package or path. |
-| `kind`   | `app`, `library`, `service`, `storage`, `external`, `process`. Defaults to `app`. |
+| `kind`   | `app`, `library`, `service`, `storage`, `external`, `process`. Defaults to `app`. `storage` and `external` are drawn as dashed cylinders below the code. |
+| `group`  | Optional module, repo or service the component belongs to (`cli/go-gh`, `tli-mapping-tool`). Containers are drawn only when there are two or more groups. |
+
+Model **where the document, request or data ends up** as its own component at the end (for
+example "DIM import" and "InsureDoc upload"), not as a step back in the component that started.
+The map then reads left to right to the outcome.
 
 **Steps** are the map's rows, top to bottom **in execution order**.
 
 | Field       | Notes |
 |-------------|-------|
 | `id`, `component`, `title` | Required. The title says what happens, in plain words. |
+| `path`      | `both` (default: the correct logic and the code agree), `correct` (only what should happen), `bug` (only what the code does now). |
 | `role`      | `normal` (default), `origin` (the bug starts here), `propagates` (the bad value or state moves on), `symptom` (the user sees it), `concurrent` (something running at the same time that the bug needs). |
 | `location`  | `{ path, symbol?, line?, url? }`. `url` is a permalink at the commit the bug happened on, with `line` the first line of the snippet. Expected on every `origin`, `propagates` and `symptom` step in code. For a `storage` step, `path` can be the on-disk path or the code that names it. |
 | `snippet`   | 3–12 lines copied exactly from the file. |
@@ -81,6 +93,22 @@ required. Optional: `author`, `created_at`, `closed_at`, `labels` (string[]), `a
 | `fix`       | `{ label, url?, detail? }` on the step the fix changes. |
 | `alongside` | The id of an earlier step this one runs at the same time as. Both share a row. |
 | `refs`      | `[{label, url}]`: comments, PRs or logs that back the step. |
+
+**Cases** (`flow.cases`) are concrete inputs, each with the route it takes through both flows:
+
+```json
+{ "id": "uw-sale-only", "title": "UW · sale number only",
+  "input": { "tempRpNo": "", "saleNo": "S00123" },
+  "correct": ["offer", "read", "dispatch", "c-decide", "c-request", "c-ask", "c-insuredoc", "c-dim"],
+  "bug": ["offer", "read", "dispatch", "decide", "dim"],
+  "should": "getProposalNo is called with salesIllustrationNo `S00123`",
+  "does": "getProposalNo is never called; filed into DIM",
+  "works": false }
+```
+
+`correct` may use `both` and `correct` steps; `bug` may use `both` and `bug` steps. Set `works:
+true` on a case the code already handles correctly; include at least one such case when there is
+one, so the fix is known to keep it.
 
 **Edges** connect steps. If you leave `edges` out, the viewer connects the steps in order.
 `kind` is `call`, `data`, `return`, `error` or `concurrent`. `label` is optional, such as a

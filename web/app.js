@@ -68,7 +68,7 @@ async function route() {
   if (m) {
     const id = decodeURIComponent(m[1]);
     const step = m[2] ? decodeURIComponent(m[2]) : null;
-    if (view?.id !== id) view = { id, selected: step };
+    if (view?.id !== id) view = { id, selected: step, caseIdx: 0 };
     else if (step) view.selected = step;
     await showTrail(true);
   } else {
@@ -138,12 +138,74 @@ function normalizeFlow(f) {
   const comps = f.components.filter((c) => c && c.id);
   const compIdx = new Map(comps.map((c, i) => [c.id, i]));
   const steps = f.steps.filter((s) => s && s.id && compIdx.has(s.component))
-    .map((s, i) => ({ ...s, role: s.role || 'normal', n: i + 1, col: compIdx.get(s.component) }));
+    .map((s, i) => ({ ...s, role: s.role || 'normal', path: s.path || 'both', n: i + 1, col: compIdx.get(s.component) }));
   const ids = new Set(steps.map((s) => s.id));
   let edges = Array.isArray(f.edges) && f.edges.length
     ? f.edges.filter((e) => ids.has(e.from) && ids.has(e.to))
     : steps.slice(1).filter((s) => !s.alongside).map((s, i) => ({ from: steps[i].id, to: s.id }));
-  return { title: f.title, comps, steps, edges, bugPath: steps.filter((s) => BUG_ROLES.includes(s.role)) };
+  const cases = (Array.isArray(f.cases) ? f.cases : [])
+    .filter((c) => c && c.id && Array.isArray(c.correct) && Array.isArray(c.bug))
+    .map((c) => ({ ...c, correct: c.correct.filter((id) => ids.has(id)), bug: c.bug.filter((id) => ids.has(id)) }));
+  const hasCorrect = steps.some((s) => s.path === 'correct');
+  return { title: f.title, comps, steps, edges, cases, hasCorrect, bugPath: [] };
+}
+
+// The case on screen, or null when the trail has none (then everything is shown).
+const activeCase = () => (flow?.cases.length ? flow.cases[Math.min(view.caseIdx ?? 0, flow.cases.length - 1)] : null);
+
+// Steps that the active case doesn't go through are dimmed.
+function caseOff(id) {
+  const c = activeCase();
+  return !!c && !c.correct.includes(id) && !c.bug.includes(id);
+}
+// An edge is lit when both ends are on a route of the active case and the route doesn't
+// go the long way between them (a shortcut the input never takes stays dim).
+function wireOn(e) {
+  const c = activeCase();
+  if (!c) return true;
+  const takes = (route) => {
+    if (!route.includes(e.from) || !route.includes(e.to)) return false;
+    const inRoute = new Set(route);
+    const seen = new Set([e.from]);
+    const queue = flow.edges.filter((x) => x !== e && x.from === e.from && inRoute.has(x.to)).map((x) => x.to);
+    while (queue.length) {
+      const n = queue.shift();
+      if (n === e.to) return false;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      for (const x of flow.edges) if (x.from === n && inRoute.has(x.to) && !seen.has(x.to)) queue.push(x.to);
+    }
+    return true;
+  };
+  return takes(c.correct) || takes(c.bug);
+}
+
+// The bug path the stepper walks: the active case's bug route, else every bug step.
+function computeBugPath() {
+  const c = activeCase();
+  const pick = c ? c.bug.map((id) => stepById.get(id)) : flow.steps;
+  flow.bugPath = pick.filter((s) => s && BUG_ROLES.includes(s.role));
+}
+
+function caseBar() {
+  if (!flow.cases.length) return '';
+  const c = activeCase();
+  const works = typeof c.works === 'boolean' ? c.works : !c.bug.some((id) => BUG_ROLES.includes(stepById.get(id)?.role));
+  const input = c.input && typeof c.input === 'object'
+    ? Object.entries(c.input).map(([k, v]) => `<span class="kv"><code>${esc(k)}</code> ${v === '' || v === null ? '<i>empty</i>' : `<code>${esc(v)}</code>`}</span>`).join('')
+    : '';
+  return `
+    <div class="cases" role="tablist" aria-label="Cases">
+      <span class="cases-label">Case</span>
+      ${flow.cases.map((x, i) => `<button class="case-pill${x === c ? ' on' : ''}" role="tab" aria-selected="${x === c}" data-case="${i}">${inline(x.title)}</button>`).join('')}
+    </div>
+    <div class="case-strip">
+      ${input ? `<div class="case-input"><span class="lbl">Input</span>${input}</div>` : ''}
+      <div class="case-out">
+        <span class="out ok"><b>Should</b> ${inline(c.should)}</span>
+        <span class="out ${works ? 'ok' : 'bad'}"><b>${works ? 'Does (same)' : 'Does now'}</b> ${inline(c.does)}</span>
+      </div>
+    </div>`;
 }
 
 async function showTrail(fresh) {
@@ -167,6 +229,7 @@ async function showTrail(fresh) {
   const nodes = (Array.isArray(trail.nodes) ? trail.nodes : []).filter((n) => n && n.id && KIND_LANE[n.kind]);
   nodeById = new Map(nodes.map((n) => [n.id, n]));
   if (view.selected && !stepById.has(view.selected) && !nodeById.has(view.selected)) view.selected = null;
+  if (flow) computeBugPath();
 
   const { issue = {}, summary = {} } = trail;
   document.title = `${issue.repo ?? ''}#${issue.number ?? ''} · Bug Trail`;
@@ -199,7 +262,7 @@ async function showTrail(fresh) {
         <div class="jump">
           ${origin ? `<button class="chip origin" data-jump="${esc(origin.id)}"><span class="dot"></span>Starts in <code>${esc(locLabel(origin.location) || origin.title)}</code></button>` : ''}
           ${symptom ? `<button class="chip symptom" data-jump="${esc(symptom.id)}"><span class="dot"></span>Seen as <b>${inline(symptom.title)}</b></button>` : ''}
-          ${flow.bugPath.length > 1 ? `
+          ${flow.steps.some((x) => BUG_ROLES.includes(x.role)) ? `
             <span class="follow" aria-label="Follow the bug">
               <button class="btn" id="prev" aria-label="Previous step on the bug path">←</button>
               <span class="pos" id="pos"></span>
@@ -208,13 +271,14 @@ async function showTrail(fresh) {
         </div>
       </div>
       <div class="legend">
-        <span><i class="sw origin"></i>Bug starts here</span>
-        <span><i class="sw bug"></i>Bug path</span>
-        <span><i class="sw symptom"></i>What the user sees</span>
-        <span><i class="sw fix"></i>Fixed here</span>
-        <span><i class="sw conc"></i>Runs at the same time</span>
+        ${flow.hasCorrect ? '<span><i class="sw correct"></i>Correct logic</span>' : ''}
+        <span><i class="sw bug"></i>What the code does</span>
+        <span><i class="sw norm"></i>Shared by both</span>
+        <span><i class="flagsw">bug starts</i>Where it goes wrong</span>
+        <span><i class="flagsw sym">user sees</i>Where it shows up</span>
         <span class="hint">Click a step for its code</span>
       </div>
+      <div id="casebar">${caseBar()}</div>
       <div class="flow-scroll"><div class="flow" id="flow"></div></div>
     </section>` : `
     <section class="panel noflow">
@@ -243,6 +307,7 @@ async function showTrail(fresh) {
 
   if (flow) {
     const el = document.getElementById('flow');
+    computeBugPath();
     drawFlow(el);
     el.addEventListener('click', (e) => {
       const s = e.target.closest('.step');
@@ -298,98 +363,211 @@ function timeline(issue, nodes) {
   return `<ol class="timeline">${items.map(row).join('')}${undated.map((n) => row({ node: n })).join('')}</ol>`;
 }
 
-// ---------- the code-flow map ----------
-// Columns are components, rows are steps in execution order. Steps with
-// `alongside` share the row of the step they run next to.
-const PAD_X = 18, HEAD_H = 64, ROW_GAP = 46, TOP_PAD = 18, BOTTOM_PAD = 28, CORNER = 8;
-let COL_W = 260;
-let geo = null; // { boxes, rowTop, rowBottom, occupied } from the last layout
+// ---------- the system map ----------
+// Components are boxes, grouped into containers by `group`; storage and external systems
+// stand in a column on the right. Steps hang under the box they run in as numbered pills,
+// coloured by flow. Arrows join components, one per flow (correct, bug, shared).
+const GAP_X = 64, PAD = 26, GROUP_PAD = 18, GROUP_HEAD = 30, NODE_H = 52, PILL_H = 26,
+  PILL_GAP = 6, STACK_GAP = 30, BAND_GAP = 26, PILL_MAX = 262;
+let gfx = null;
 let resizeTimer = null;
 let ro = null;
 
+const textWidth = (() => {
+  const ctx = document.createElement('canvas').getContext('2d');
+  return (t, px, weight = 400) => {
+    ctx.font = `${weight} ${px}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    return ctx.measureText(String(t ?? '')).width;
+  };
+})();
+
+const isBugStep = (s) => s.path === 'bug' || BUG_ROLES.includes(s.role);
+const isStore = (c) => c.kind === 'storage' || c.kind === 'external';
+
 function drawFlow(el) {
   const avail = el.parentElement.clientWidth;
-  const n = flow.comps.length;
-  COL_W = Math.max(230, Math.min(380, Math.floor(avail / n)));
-  const nodeW = COL_W - PAD_X * 2;
-  const width = Math.max(avail, n * COL_W);
-  el.parentElement.classList.toggle('fits', n * COL_W <= avail);
-  const offset = Math.floor((width - n * COL_W) / 2); // centre when there is spare room
+  const comps = flow.comps;
+  const stepsOf = new Map(comps.map((c) => [c.id, flow.steps.filter((s) => s.component === c.id)]));
 
-  // Rows read left to right, then top to bottom. A step joins the current row
-  // when the previous step calls straight into it in a column further right;
-  // `alongside` steps join the row of the step they run next to.
-  const rowOf = new Map();
-  const used = new Set(); // "row,col"
-  const linked = (a, b) => flow.edges.some((e) => e.from === a && e.to === b);
-  let row = -1;
-  let prev = null;
-  for (const s of flow.steps) {
-    const a = s.alongside ? rowOf.get(s.alongside) : undefined;
-    let r;
-    if (a !== undefined && !used.has(`${a},${s.col}`)) r = a;
-    else if (prev && s.col > prev.col && !used.has(`${row},${s.col}`) && linked(prev.id, s.id)) r = row;
-    else r = ++row;
-    rowOf.set(s.id, r);
-    used.add(`${r},${s.col}`);
-    if (!s.alongside) prev = s;
+  // Component-level arrows, one per (from, to, flow), from the step edges that cross components.
+  const cmap = new Map();
+  for (const e of flow.edges) {
+    const a = stepById.get(e.from), b = stepById.get(e.to);
+    if (a.component === b.component) continue;
+    const kind = a.path === 'correct' || b.path === 'correct' ? 'ok'
+      : e.kind === 'concurrent' || a.role === 'concurrent' || b.role === 'concurrent' ? 'conc'
+      : isBugStep(b) || e.kind === 'error' ? 'bug' : 'norm';
+    const key = `${a.component}|${b.component}|${kind}`;
+    if (!cmap.has(key)) cmap.set(key, { from: a.component, to: b.component, kind, edges: [] });
+    cmap.get(key).edges.push(e);
   }
-  const rows = row + 1;
-  const bugIndex = new Map(flow.bugPath.map((s, i) => [s.id, i + 1]));
-  const colX = (c) => offset + c * COL_W;
+  const cedges = [...cmap.values()];
 
+  // Rank components left to right: drop back edges (DFS from the first step's component), then longest path.
+  const firstSeen = new Map();
+  flow.steps.forEach((s, i) => { if (!firstSeen.has(s.component)) firstSeen.set(s.component, i); });
+  const order = [...comps].sort((x, y) => (firstSeen.get(x.id) ?? 1e9) - (firstSeen.get(y.id) ?? 1e9));
+  const out = new Map(comps.map((c) => [c.id, []]));
+  for (const e of cedges) if (!out.get(e.from).includes(e.to)) out.get(e.from).push(e.to);
+  const state = new Map(); const back = new Set();
+  const dfs = (u) => {
+    state.set(u, 1);
+    for (const v of out.get(u)) {
+      if (state.get(v) === 1) back.add(`${u}|${v}`);
+      else if (!state.has(v)) dfs(v);
+    }
+    state.set(u, 2);
+  };
+  for (const c of order) if (!state.has(c.id)) dfs(c.id);
+  const rank = new Map(comps.map((c) => [c.id, 0]));
+  for (let pass = 0; pass < comps.length; pass++) {
+    for (const [u, vs] of out) for (const v of vs) {
+      if (back.has(`${u}|${v}`)) continue;
+      if (rank.get(v) < rank.get(u) + 1) rank.set(v, rank.get(u) + 1);
+    }
+  }
+
+  // Sizes.
+  const size = new Map();
+  for (const c of comps) {
+    const pills = stepsOf.get(c.id);
+    const nodeW = Math.max(150, textWidth(c.name, 13, 600), textWidth(c.detail, 12)) + 34;
+    const extra = (st) => 44 + (st.role === 'origin' || st.role === 'symptom' ? 74 : 0) + (st.fix ? 46 : 0);
+    const pillW = pills.length ? Math.min(PILL_MAX, Math.max(...pills.map((st) => textWidth(st.title, 12) + extra(st)))) : 0;
+    // Long titles wrap to at most three lines instead of being cut off.
+    const pillH = pills.map((st) => {
+      const lines = Math.min(3, Math.max(1, Math.ceil(textWidth(st.title, 12) / Math.max(60, pillW - extra(st)))));
+      return lines === 1 ? PILL_H : 10 + lines * 15;
+    });
+    const w = Math.max(nodeW, pillW);
+    const h = NODE_H + (pills.length ? 14 + pillH.reduce((x2, y2) => x2 + y2 + PILL_GAP, 0) - PILL_GAP : 0);
+    size.set(c.id, { nodeW, pillW, pillH, w, h });
+  }
+
+  // Columns (shared by all groups so the flow reads left to right).
+  // Storage and external systems sit in their own band below the code, at their place in the order.
+  const flowComps = order.filter((c) => !isStore(c));
+  const stores = order.filter(isStore);
+  const maxRank = Math.max(0, ...comps.map((c) => rank.get(c.id)));
+  const colW = Array(maxRank + 1).fill(0);
+  for (const c of comps) colW[rank.get(c.id)] = Math.max(colW[rank.get(c.id)], size.get(c.id).w);
+  const colX = [];
+  let x = PAD + GROUP_PAD;
+  for (let r = 0; r <= maxRank; r++) { colX[r] = x; x += colW[r] + GAP_X; }
+
+  // Groups become horizontal bands, in order of first appearance.
+  const groups = [];
+  for (const c of flowComps) {
+    const g = c.group || '';
+    let entry = groups.find((x2) => x2.key === g);
+    if (!entry) groups.push(entry = { key: g, label: c.group || '', comps: [] });
+    entry.comps.push(c);
+  }
+  if (stores.length) groups.push({ key: '\u0001stores', label: '', comps: stores, stores: true });
+
+  const groupOf = new Map();
+  groups.forEach((g, gi) => g.comps.forEach((c) => groupOf.set(c.id, gi)));
+  const skips = cedges.filter((e) => groupOf.get(e.from) === groupOf.get(e.to) && rank.get(e.to) - rank.get(e.from) > 1);
+  // One module needs no box around it; only draw containers when there are several.
+  const boxed = groups.filter((g) => g.label).length > 1;
+
+  // Groups whose columns don't overlap share a band, side by side; storage gets the last band.
+  const bands = [];
+  for (const [gi, g] of groups.entries()) {
+    const ranks = new Set(g.comps.map((c) => rank.get(c.id)));
+    const fit = g.stores ? null : bands.find((bd) => !bd.stores && [...ranks].every((r) => !bd.ranks.has(r)));
+    if (fit) { fit.groups.push(gi); ranks.forEach((r) => fit.ranks.add(r)); }
+    else bands.push({ groups: [gi], ranks, stores: !!g.stores });
+  }
+
+  const bandOfComp = new Map();
+  bands.forEach((bd, bi) => bd.groups.forEach((gi) => groups[gi].comps.forEach((c) => bandOfComp.set(c.id, bi))));
+  // Returns to an earlier column in the same band run through the lane above the boxes.
+  const ups = cedges.filter((e) => !skips.includes(e) && bandOfComp.get(e.from) === bandOfComp.get(e.to)
+    && rank.get(e.to) < rank.get(e.from));
+  const place = new Map(); // compId -> {x, y, w, nodeW, pillW, h}
+  let y = PAD;
+  const containers = [];
+  for (const [bi, bd] of bands.entries()) {
+    const top = y;
+    const labelled = boxed && bd.groups.some((gi) => groups[gi].label);
+    const lanes = [...skips, ...ups].filter((e) => bandOfComp.get(e.from) === bi).length;
+    const laneTop = top + (labelled ? GROUP_HEAD : GROUP_PAD / 2);
+    const inner = laneTop + (lanes ? lanes * 10 + 8 : 0);
+    let bandH = 0;
+    for (const gi of bd.groups) {
+      const g = groups[gi];
+      g.laneTop = laneTop;
+      for (let r = 0; r <= maxRank; r++) {
+        let yy = inner;
+        for (const c of g.comps.filter((c2) => rank.get(c2.id) === r)) {
+          const sz = size.get(c.id);
+          place.set(c.id, { x: colX[r] + (colW[r] - sz.w) / 2, y: yy, ...sz });
+          yy += sz.h + STACK_GAP;
+        }
+        bandH = Math.max(bandH, yy - STACK_GAP - inner);
+      }
+    }
+    const bottom = inner + bandH + GROUP_PAD;
+    for (const gi of bd.groups) {
+      const g = groups[gi];
+      if (!g.label || !boxed) continue;
+      const xs = g.comps.map((c) => place.get(c.id));
+      containers.push({ label: g.label, l: Math.min(...xs.map((p) => p.x)) - GROUP_PAD, r: Math.max(...xs.map((p) => p.x + p.w)) + GROUP_PAD, t: top, b: bottom });
+    }
+    y = bottom + BAND_GAP;
+  }
+  const backCount = cedges.filter((e) => !ups.includes(e)).filter((e) => {
+    const a = place.get(e.from), b = place.get(e.to);
+    return b.x + b.w / 2 < a.x + a.w / 2 - 4;
+  }).length;
+  const contentBottom = y - BAND_GAP;
+  const height = contentBottom + 24 + backCount * 12 + PAD;
+  const contentW = x - GAP_X + PAD + GROUP_PAD;
+  const width = Math.max(avail, contentW);
+  const shift = Math.max(0, Math.floor((avail - contentW) / 2));
+  el.parentElement.classList.toggle('fits', contentW <= avail);
   el.style.width = `${width}px`;
+
+  const bugIndex = new Map(flow.bugPath.map((s, i) => [s.id, i + 1]));
+  const flowCls = (s) => (s.path === 'correct' ? 'f-ok' : isBugStep(s) ? 'f-bug' : s.role === 'concurrent' ? 'f-conc' : 'f-norm');
   el.innerHTML = `
-    <div class="flow-head" style="width:${width}px">
-      ${flow.comps.map((c, i) => `
-        <div class="comp-head kind-${esc(c.kind || 'app')}" style="left:${colX(i)}px;width:${COL_W}px">
-          <b>${inline(c.name)}</b>${c.detail ? `<span>${inline(c.detail)}</span>` : ''}
-        </div>`).join('')}
-    </div>
-    <div class="flow-canvas" id="canvas">
-      ${flow.comps.map((c, i) => `<div class="col-band${i % 2 ? ' odd' : ''}" style="left:${colX(i)}px;width:${COL_W}px"></div>`).join('')}
+    <div class="flow-canvas map" id="canvas" style="height:${height}px">
+      ${containers.map((g) => `<div class="group" style="left:${g.l + shift}px;top:${g.t}px;width:${g.r - g.l}px;height:${g.b - g.t}px"><span>${esc(g.label)}</span></div>`).join('')}
       <svg class="wires" id="wires"></svg>
-      ${flow.steps.map((s) => `
-        <div class="step role-${esc(s.role)}${s.fix ? ' has-fix' : ''}" data-id="${esc(s.id)}" tabindex="0" role="button"
-             aria-label="Step ${s.n}: ${esc(s.title)}${ROLE_TAG[s.role] ? ` (${ROLE_TAG[s.role]})` : ''}"
-             style="left:${colX(s.col) + PAD_X}px;top:0;width:${nodeW}px">
-          <div class="step-top">
+      ${comps.map((c) => {
+        const p = place.get(c.id);
+        const nx = p.x + shift + (p.w - p.nodeW) / 2;
+        const px = p.x + shift + (p.w - p.pillW) / 2;
+        return `
+        <div class="cnode kind-${esc(c.kind || 'app')}" data-comp="${esc(c.id)}" style="left:${nx}px;top:${p.y}px;width:${p.nodeW}px;height:${NODE_H}px">
+          <b>${esc(c.name)}</b>${c.detail ? `<span>${esc(c.detail)}</span>` : ''}
+        </div>
+        ${stepsOf.get(c.id).map((s, k, all) => `
+          <div class="step pill${p.pillH[k] > PILL_H ? ' multi' : ''} ${flowCls(s)} role-${esc(s.role)}${caseOff(s.id) ? ' off' : ''}" data-id="${esc(s.id)}" tabindex="0" role="button"
+               title="${esc(s.title)}${s.location?.path ? ` — ${esc(locLabel(s.location))}` : ''}"
+               style="left:${px}px;top:${p.y + NODE_H + 14 + p.pillH.slice(0, k).reduce((x2, y2) => x2 + y2 + PILL_GAP, 0)}px;width:${p.pillW}px;height:${p.pillH[k]}px">
             <span class="num">${s.n}</span>
-            ${ROLE_TAG[s.role] ? `<span class="tag">${ROLE_TAG[s.role]}${bugIndex.has(s.id) && flow.bugPath.length > 1 ? ` · ${bugIndex.get(s.id)}/${flow.bugPath.length}` : ''}</span>` : ''}
-          </div>
-          <div class="step-title">${inline(s.title)}</div>
-          ${s.location?.path ? `<div class="step-loc" title="${esc(s.location.path)}${s.location.line ? `:${s.location.line}` : ''}"><code>${esc(locLabel(s.location))}</code></div>` : ''}
-          ${s.fix ? `<div class="step-fix">Fixed · ${inline(s.fix.label)}</div>` : ''}
-        </div>`).join('')}
+            <span class="pt">${inline(s.title)}</span>
+            ${s.role === 'origin' ? `<span class="flag">bug starts${bugIndex.has(s.id) ? '' : ''}</span>` : ''}
+            ${s.role === 'symptom' ? '<span class="flag sym">user sees</span>' : ''}
+            ${s.fix ? '<span class="flag fix">fixed</span>' : ''}
+          </div>`).join('')}`;
+      }).join('')}
     </div>`;
 
-  // Measure, then place rows top to bottom.
-  const canvas = document.getElementById('canvas');
-  const els = new Map([...canvas.querySelectorAll('.step')].map((e) => [e.dataset.id, e]));
-  const rowH = Array(rows).fill(0);
-  for (const s of flow.steps) rowH[rowOf.get(s.id)] = Math.max(rowH[rowOf.get(s.id)], els.get(s.id).offsetHeight);
-  const rowTop = [];
-  let y = TOP_PAD;
-  for (let r = 0; r < rows; r++) { rowTop[r] = y; y += rowH[r] + ROW_GAP; }
-  const height = y - ROW_GAP + BOTTOM_PAD;
-  canvas.style.height = `${height}px`;
-
   const boxes = new Map();
-  const occupied = new Map(); // "col,row" -> step id
-  for (const s of flow.steps) {
-    const r = rowOf.get(s.id);
-    const e = els.get(s.id);
-    e.style.top = `${rowTop[r]}px`;
-    const l = colX(s.col) + PAD_X;
-    const h = e.offsetHeight;
-    boxes.set(s.id, { l, r: l + nodeW, t: rowTop[r], b: rowTop[r] + h, cx: l + nodeW / 2, cy: rowTop[r] + h / 2, col: s.col, row: r });
-    occupied.set(`${s.col},${r}`, s.id);
+  for (const c of comps) {
+    const p = place.get(c.id);
+    const l = p.x + shift + (p.w - p.nodeW) / 2;
+    boxes.set(c.id, { l, r: l + p.nodeW, t: p.y, b: p.y + NODE_H, cx: l + p.nodeW / 2, cy: p.y + NODE_H / 2,
+      slotL: p.x + shift, slotR: p.x + shift + p.w,
+      stackBottom: p.y + p.h, pills: stepsOf.get(c.id).length });
   }
-  geo = { boxes, rowTop, rowH, occupied };
-
+  gfx = { boxes, cedges, height, contentBottom, skips: new Set(skips), ups: new Set(ups), bandOfComp,
+    laneTop: new Map([...skips, ...ups].map((e) => [e, groups[groupOf.get(e.from)].laneTop])) };
   drawWires(width, height);
 
-  // Re-layout when the panel width changes (window resize, drawer, etc.).
   if (ro) ro.disconnect();
   ro = new ResizeObserver(() => {
     clearTimeout(resizeTimer);
@@ -401,133 +579,74 @@ function drawFlow(el) {
   ro.observe(el.parentElement);
 }
 
-// Orthogonal path through points with rounded corners.
-function ortho(pts) {
-  let d = `M${pts[0][0]},${pts[0][1]}`;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const [px, py] = pts[i - 1], [x, y] = pts[i], [nx, ny] = pts[i + 1];
-    const r = Math.min(CORNER, Math.hypot(x - px, y - py) / 2, Math.hypot(nx - x, ny - y) / 2);
-    const ax = x - Math.sign(x - px) * r, ay = y - Math.sign(y - py) * r;
-    const bx = x + Math.sign(nx - x) * r, by = y + Math.sign(ny - y) * r;
-    d += ` L${ax},${ay} Q${x},${y} ${bx},${by}`;
-  }
-  const last = pts[pts.length - 1];
-  return `${d} L${last[0]},${last[1]}`;
-}
-
-function wirePath(a, b, dy = 0, dx = 0) {
-  const { occupied } = geo;
-  const busy = (col, row) => occupied.has(`${col},${row}`);
-  const between = (x, y) => { const lo = Math.min(x, y), hi = Math.max(x, y); const out = []; for (let i = lo + 1; i < hi; i++) out.push(i); return out; };
-  const LANE_Y = (box) => box.t + 22 + dy; // wires leave and enter at the title line
-  // Detours run through the middle of the gap between rows, below or above the tallest step.
-  const gapBelow = (r) => geo.rowTop[r] + geo.rowH[r] + ROW_GAP / 2 + dy / 2;
-  const gapAbove = (r) => geo.rowTop[r] - ROW_GAP / 2 - dy / 2;
-  b = { ...b, cx: b.cx + dx };
-  const ARROW = 3;
-
-  if (a.col === b.col) {
-    const clear = between(a.row, b.row).every((r) => !busy(a.col, r));
-    if (b.row > a.row && clear) return [[a.cx, a.b], [b.cx, b.t - ARROW]];
-    const gx = a.r + PAD_X - 4; // the gutter to the right of the column
-    return [[a.r, LANE_Y(a)], [gx, LANE_Y(a)], [gx, LANE_Y(b)], [b.r + ARROW, LANE_Y(b)]];
-  }
-  const dir = b.col > a.col ? 1 : -1;
-  const sideA = dir > 0 ? a.r : a.l;
-  const sideB = dir > 0 ? b.l - ARROW : b.r + ARROW;
-  if (a.row === b.row) {
-    if (between(a.col, b.col).every((c) => !busy(c, a.row))) return [[sideA, LANE_Y(a)], [sideB, LANE_Y(b)]];
-    const gy = gapBelow(a.row);
-    return [[a.cx, a.b], [a.cx, gy], [b.cx, gy], [b.cx, b.b + ARROW]];
-  }
-
-  const down = b.row > a.row;
-  const endY = down ? b.t - ARROW : b.b + ARROW;
-  // 1) across on A's row, then down/up into B.
-  const hClear = [...between(a.col, b.col), b.col].every((c) => !busy(c, a.row)) &&
-                 between(a.row, b.row).every((r) => !busy(b.col, r));
-  if (hClear) return [[sideA, LANE_Y(a)], [b.cx, LANE_Y(a)], [b.cx, endY]];
-  // 2) down/up out of A, then across into B's side.
-  const vClear = [...between(a.row, b.row), b.row].every((r) => !busy(a.col, r)) &&
-                 between(a.col, b.col).every((c) => !busy(c, b.row));
-  if (vClear) return [[a.cx, down ? a.b : a.t], [a.cx, LANE_Y(b)], [sideB, LANE_Y(b)]];
-  // 3) through the gap next to A's row, then into B.
-  const gapY = down ? gapBelow(a.row) : gapAbove(a.row);
-  return [[a.cx, down ? a.b : a.t], [a.cx, gapY], [b.cx, gapY], [b.cx, endY]];
-}
-
-// Pick the first of a few nudged variants of a wire whose straight segments
-// don't run on top of a wire already placed.
-let placed = [];
-function placeWire(a, b) {
-  const overlaps = (pts) => {
-    for (let k = 1; k < pts.length; k++) {
-      const [x1, y1] = pts[k - 1], [x2, y2] = pts[k];
-      for (const [u1, v1, u2, v2] of placed) {
-        if (y1 === y2 && v1 === v2 && Math.abs(y1 - v1) < 6 && Math.min(x1, x2) < Math.max(u1, u2) && Math.min(u1, u2) < Math.max(x1, x2)) return true;
-        if (x1 === x2 && u1 === u2 && Math.abs(x1 - u1) < 6 && Math.min(y1, y2) < Math.max(v1, v2) && Math.min(v1, v2) < Math.max(y1, y2)) return true;
-      }
-    }
-    return false;
-  };
-  let pts;
-  for (const [dy, dx] of [[0, 0], [16, 18], [16, -18], [32, 36], [-10, -36]]) {
-    pts = wirePath(a, b, dy, dx);
-    if (!overlaps(pts)) break;
-  }
-  for (let k = 1; k < pts.length; k++) placed.push([...pts[k - 1], ...pts[k]]);
-  return pts;
-}
-
-let labelRects = [];
 function drawWires(width, height) {
-  placed = [];
-  labelRects = [];
   const svg = document.getElementById('wires');
   svg.setAttribute('width', width);
   svg.setAttribute('height', height);
-  const bug = new Set(flow.bugPath.map((s) => s.id));
+  const { boxes, cedges, contentBottom } = gfx;
   const marker = (k) => `<marker id="m-${k}" class="w-${k}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9 z"/></marker>`;
-  const ctx = document.createElement('canvas').getContext('2d');
-  ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
 
-  let labels = '';
-  const paths = flow.edges.map((e, i) => {
-    const a = geo.boxes.get(e.from), b = geo.boxes.get(e.to);
-    const sa = stepById.get(e.from), sb = stepById.get(e.to);
-    const pts = placeWire(a, b);
-    const kind = e.kind === 'concurrent' || sa.role === 'concurrent' || sb.role === 'concurrent' ? 'conc'
-      : (bug.has(e.from) && bug.has(e.to)) || e.kind === 'error' ? 'bug' : 'norm';
-    // Label: a spot along a segment that clears steps and other labels; if none, it
-    // stays in the tooltip and the drawer.
-    if (e.label) {
-      const w = Math.min(ctx.measureText(e.label).width + 12, 300);
-      const cands = [];
-      for (let k = 1; k < pts.length; k++) {
-        const [x1, y1] = pts[k - 1], [x2, y2] = pts[k];
-        const len = Math.hypot(x2 - x1, y2 - y1);
-        if (y1 === y2 && len >= w + 16) {
-          for (const f of [0.5, 0.3, 0.7]) cands.push({ len, l: x1 + (x2 - x1) * f - w / 2, t: y1 - 19 });
-        } else if (x1 === x2 && len >= 34) {
-          cands.push({ len: len / 4, l: x1 + 6, t: (y1 + y2) / 2 - 9 });
-        }
-      }
-      cands.sort((p, q) => q.len - p.len);
-      const hit = (r) => labelRects.some((o) => r.l < o.l + o.w + 4 && o.l < r.l + r.w + 4 && r.t < o.t + 18 + 2 && o.t < r.t + 18 + 2) ||
-        [...geo.boxes.values()].some((b) => r.l < b.r && b.l < r.l + r.w && r.t < b.b && b.t < r.t + 18);
-      const spot = cands.map((c) => ({ l: c.l, t: c.t, w })).find((r) => !hit(r));
-      if (spot) {
-        labelRects.push(spot);
-        labels += `<div class="wire-label w-${kind}" data-edge="${i}" style="left:${spot.l}px;top:${spot.t}px;width:${w}px">${esc(e.label)}</div>`;
-      }
+  // Parallel arrows between the same two components sit side by side.
+  const pairs = new Map();
+  for (const e of cedges) {
+    const k = [e.from, e.to].sort().join('|');
+    if (!pairs.has(k)) pairs.set(k, []);
+    pairs.get(k).push(e);
+  }
+  const offset = (e) => { const list = pairs.get([e.from, e.to].sort().join('|')); const i = list.indexOf(e); return (i - (list.length - 1) / 2) * 9; };
+
+  let backIdx = 0;
+  const laneUsed = new Map();
+  const paths = cedges.map((e) => {
+    const a = boxes.get(e.from), b = boxes.get(e.to);
+    const o = offset(e);
+    let d;
+    if (gfx.skips.has(e)) {
+      // Skips columns: rise into a lane above the boxes, run across, drop into B.
+      const top = gfx.laneTop.get(e);
+      const k = laneUsed.get(top) || 0; laneUsed.set(top, k + 1);
+      const yl = top + 4 + k * 10, y1 = a.cy + o, y2 = b.cy + o, R = 10;
+      // Rise just right of A's box, drop just left of B's whole column (pills are wider than boxes).
+      const xa = Math.max(a.r, a.slotR) + 12, xb = Math.min(b.l, b.slotL) - 14 - k * 6;
+      d = `M${a.r},${y1} L${xa - R},${y1} Q${xa},${y1} ${xa},${y1 - R} L${xa},${yl + R} Q${xa},${yl} ${xa + R},${yl} L${xb - R},${yl} Q${xb},${yl} ${xb},${yl + R} L${xb},${y2 - R} Q${xb},${y2} ${xb + R},${y2} L${b.l - 3},${y2}`;
+    } else if (gfx.ups.has(e)) {
+      // A return to an earlier column: up from A's top, back along the lane, down into B's top.
+      const top = gfx.laneTop.get(e);
+      const k = laneUsed.get(top) || 0; laneUsed.set(top, k + 1);
+      const yl = top + 4 + k * 10, R = 8;
+      const xa = a.cx + 12 + o, xb = b.cx + 12 + o + k * 4;
+      d = `M${xa},${a.t} L${xa},${yl + R} Q${xa},${yl} ${xa - R},${yl} L${xb + R},${yl} Q${xb},${yl} ${xb},${yl + R} L${xb},${b.t - 3}`;
+    } else if (b.l > a.r + 8 && gfx.bandOfComp.get(e.from) !== gfx.bandOfComp.get(e.to)) {
+      // Forward into another band: across to the gap before B's column, then up or down, then in.
+      const xg = Math.min(b.l, b.slotL) - 14 - (o > 0 ? 6 : 0), y1 = a.cy + o, y2 = b.cy + o, R = 10;
+      const dir = y2 > y1 ? 1 : -1;
+      d = `M${a.r},${y1} L${xg - R},${y1} Q${xg},${y1} ${xg},${y1 + dir * R} L${xg},${y2 - dir * R} Q${xg},${y2} ${xg + R},${y2} L${b.l - 3},${y2}`;
+    } else if (b.l > a.r + 8) {
+      // Forward: out of A's right side, into B's left side.
+      const y1 = a.cy + o, y2 = b.cy + o, dx = Math.max(36, (b.l - a.r) / 2);
+      d = `M${a.r},${y1} C${a.r + dx},${y1} ${b.l - dx},${y2} ${b.l - 3},${y2}`;
+    } else if (Math.abs(a.cx - b.cx) < 8) {
+      // Same column: around the right side.
+      const xr = Math.max(a.r, b.r) + 34;
+      d = `M${a.r},${a.cy + o} C${xr},${a.cy + o} ${xr},${b.cy + o} ${b.r + 3},${b.cy + o}`;
+    } else {
+      // Back to the left: drop below everything, run left, come up into B's left side.
+      const yb = contentBottom + 20 + backIdx++ * 12;
+      const xl = Math.min(b.l, b.slotL) - 14 - backIdx * 6;
+      const sx = a.cx + o;
+      const R = 10;
+      d = `M${sx},${a.stackBottom + 4} L${sx},${yb - R} Q${sx},${yb} ${sx - R},${yb} L${xl + R},${yb} Q${xl},${yb} ${xl},${yb - R} L${xl},${b.cy + o + R} Q${xl},${b.cy + o} ${xl + R},${b.cy + o} L${b.l - 3},${b.cy + o}`;
     }
-    return `<path class="wire w-${kind}" data-edge="${i}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" d="${ortho(pts)}" marker-end="url(#m-${kind})"><title>${esc(sa.title)} → ${esc(sb.title)}${e.label ? ` (${esc(e.label)})` : ''}</title></path>`;
+    const steps = [...new Set(e.edges.flatMap((x) => [x.from, x.to]))].join(' ');
+    const on = e.edges.some(wireOn);
+    const title = e.edges.map((x) => `${stepById.get(x.from).n} → ${stepById.get(x.to).n}${x.label ? `: ${x.label}` : ''}`).join('\n');
+    return `<path class="wire w-${e.kind}${on ? '' : ' off'}${e.kind === 'norm' && b.l <= a.r ? ' dashed' : ''}" data-steps="${esc(steps)}" d="${d}" marker-end="url(#m-${e.kind})"><title>${esc(title)}</title></path>`;
   });
-  // Bug wires on top of the others.
-  paths.sort((x, y) => (x.includes('w-bug') ? 1 : 0) - (y.includes('w-bug') ? 1 : 0));
-  svg.innerHTML = `<defs>${['norm', 'bug', 'conc'].map(marker).join('')}</defs>${paths.join('')}`;
-  document.querySelectorAll('.wire-label').forEach((l) => l.remove());
-  document.getElementById('canvas').insertAdjacentHTML('beforeend', labels);
+  // Dotted spines from each box to its pills.
+  const spines = [...boxes.values()].filter((bx) => bx.pills).map((bx) =>
+    `<line class="spine" x1="${bx.cx}" y1="${bx.b}" x2="${bx.cx}" y2="${bx.stackBottom - 12}"/>`);
+  paths.sort((x, y) => (/w-(bug|ok)/.test(x) ? 1 : 0) - (/w-(bug|ok)/.test(y) ? 1 : 0));
+  svg.innerHTML = `<defs>${['norm', 'bug', 'conc', 'ok'].map(marker).join('')}</defs>${spines.join('')}${paths.join('')}`;
 }
 
 // ---------- selection, focus, follow the bug ----------
@@ -538,13 +657,13 @@ function focusStep(id) {
   if (!id || !stepById.has(id)) { el.classList.remove('focus'); return; }
   el.classList.add('focus');
   const keep = new Set([id]);
-  for (const e of flow.edges) {
-    if (e.from === id || e.to === id) {
-      keep.add(e.from); keep.add(e.to);
-      el.querySelectorAll(`[data-edge="${flow.edges.indexOf(e)}"]`).forEach((w) => w.classList.add('hl'));
-    }
-  }
+  for (const e of flow.edges) if (e.from === id || e.to === id) { keep.add(e.from); keep.add(e.to); }
   el.querySelectorAll('.step').forEach((s) => { if (keep.has(s.dataset.id)) s.classList.add('hl'); });
+  el.querySelectorAll('.wire').forEach((w) => { if (w.dataset.steps.split(' ').includes(id)) w.classList.add('hl'); });
+  const comp = stepById.get(id).component;
+  el.querySelectorAll('.cnode').forEach((n) => {
+    if ([...keep].some((k) => stepById.get(k)?.component === n.dataset.comp)) n.classList.add('hl');
+  });
 }
 
 function markSelected() {
@@ -568,6 +687,7 @@ function select(id, scroll = true) {
 
 function followBug(dir) {
   const path = flow.bugPath;
+  if (!path.length) return;
   const i = path.findIndex((s) => s.id === view.selected);
   const next = i === -1 ? 0 : Math.max(0, Math.min(path.length - 1, i + dir));
   select(path[next].id);
@@ -577,6 +697,7 @@ function updateFollow() {
   const pos = document.getElementById('pos');
   if (!pos || !flow) return;
   const path = flow.bugPath;
+  document.getElementById('next').hidden = path.length === 0;
   const i = path.findIndex((s) => s.id === view.selected);
   pos.textContent = i === -1 ? '' : `${i + 1} of ${path.length}`;
   document.getElementById('prev').hidden = i === -1;
@@ -628,6 +749,7 @@ function stepDetail(s) {
     <div class="drawer-head role-${esc(s.role)}">
       <span class="num">${s.n}</span>
       <span class="where">${inline(comp.name)}</span>
+      ${s.path === 'correct' ? '<span class="tag ok">Correct logic</span>' : s.path === 'bug' && !ROLE_TAG[s.role] ? '<span class="tag">Current code</span>' : ''}
       ${ROLE_TAG[s.role] ? `<span class="tag">${ROLE_TAG[s.role]}</span>` : ''}
       <button class="btn close" data-close aria-label="Close details">✕</button>
     </div>${follow}
@@ -675,6 +797,16 @@ function nodeDetail(n) {
 document.addEventListener('click', (e) => {
   if (!trail || !view) return;
   if (e.target.closest('[data-close]')) return select(null, false);
+  const cb = e.target.closest('[data-case]');
+  if (cb) {
+    view.caseIdx = Number(cb.dataset.case);
+    const c = activeCase();
+    if (view.selected && stepById.has(view.selected) && !c.correct.includes(view.selected) && !c.bug.includes(view.selected)) view.selected = null;
+    document.getElementById('casebar').innerHTML = caseBar();
+    computeBugPath();
+    drawFlow(document.getElementById('flow'));
+    return select(view.selected, false);
+  }
   const f = e.target.closest('[data-follow]');
   if (f) return followBug(Number(f.dataset.follow));
   const b = e.target.closest('[data-jump]');

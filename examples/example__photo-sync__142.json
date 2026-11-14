@@ -311,19 +311,22 @@
         "id": "app",
         "name": "Android app",
         "detail": "apps/android",
-        "kind": "app"
+        "kind": "app",
+        "group": "photo-sync client"
       },
       {
         "id": "core",
         "name": "Upload core",
         "detail": "core/upload",
-        "kind": "library"
+        "kind": "library",
+        "group": "photo-sync client"
       },
       {
         "id": "api",
         "name": "Sync API",
         "detail": "server",
-        "kind": "service"
+        "kind": "service",
+        "group": "photo-sync server"
       }
     ],
     "steps": [
@@ -338,7 +341,8 @@
           "line": 48,
           "url": "https://github.com/example/photo-sync/blob/a1b2c3d/apps/android/src/ShareActivity.kt#L48"
         },
-        "detail": "The share sheet hands the file to `UploadWorker`, which calls the shared upload core."
+        "detail": "The share sheet hands the file to `UploadWorker`, which calls the shared upload core.",
+        "path": "both"
       },
       {
         "id": "start",
@@ -351,7 +355,33 @@
           "line": 62,
           "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/uploader.go#L62"
         },
-        "detail": "`Start` stats the file (2,576,980,378 bytes) and builds a `ChunkPlan` from the size."
+        "detail": "`Start` stats the file (2,576,980,378 bytes) and builds a `ChunkPlan` from the size.",
+        "path": "both"
+      },
+      {
+        "id": "c-plan",
+        "component": "core",
+        "path": "correct",
+        "title": "Size kept as int64",
+        "detail": "What PR #151 changes: `totalSize` is an `int64`, so a 2.4 GB size stays positive."
+      },
+      {
+        "id": "c-count",
+        "component": "core",
+        "path": "correct",
+        "title": "Chunk count comes out positive"
+      },
+      {
+        "id": "c-session",
+        "component": "api",
+        "path": "correct",
+        "title": "Server opens the upload session"
+      },
+      {
+        "id": "c-done",
+        "component": "app",
+        "path": "correct",
+        "title": "Upload runs to 100%"
       },
       {
         "id": "plan",
@@ -376,7 +406,8 @@
             "label": "bisect result",
             "url": "https://github.com/example/photo-sync/commit/a1b2c3d"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "count",
@@ -390,7 +421,8 @@
           "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/chunk_plan.go#L31"
         },
         "snippet": "p.chunkCount = int32(math.Ceil(float64(p.totalSize) / float64(p.chunkSize)))",
-        "detail": "With a negative `totalSize`, `chunkCount` is -1048 for the reporter's file. Nothing checks it."
+        "detail": "With a negative `totalSize`, `chunkCount` is -1048 for the reporter's file. Nothing checks it.",
+        "path": "bug"
       },
       {
         "id": "session",
@@ -409,7 +441,8 @@
             "label": "debug log",
             "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1002"
           }
-        ]
+        ],
+        "path": "bug"
       },
       {
         "id": "toast",
@@ -428,7 +461,8 @@
             "label": "issue #142",
             "url": "https://github.com/example/photo-sync/issues/142"
           }
-        ]
+        ],
+        "path": "bug"
       }
     ],
     "edges": [
@@ -461,6 +495,56 @@
         "to": "toast",
         "kind": "error",
         "label": "HTTP 400"
+      },
+      {
+        "from": "start",
+        "to": "c-plan",
+        "kind": "call",
+        "label": "newChunkPlan(size)"
+      },
+      {
+        "from": "c-plan",
+        "to": "c-count",
+        "kind": "data"
+      },
+      {
+        "from": "c-count",
+        "to": "c-session",
+        "kind": "call",
+        "label": "POST /sessions"
+      },
+      {
+        "from": "c-session",
+        "to": "c-done",
+        "kind": "return",
+        "label": "201"
+      }
+    ],
+    "cases": [
+      {
+        "id": "big-video",
+        "title": "2.4 GB video",
+        "input": {
+          "size": "2,576,980,378 bytes"
+        },
+        "correct": [
+          "share",
+          "start",
+          "c-plan",
+          "c-count",
+          "c-session",
+          "c-done"
+        ],
+        "bug": [
+          "share",
+          "start",
+          "plan",
+          "count",
+          "session",
+          "toast"
+        ],
+        "should": "The size stays positive and the upload completes",
+        "does": "`totalSize` wraps negative; the server rejects the session with HTTP 400"
       }
     ]
   }

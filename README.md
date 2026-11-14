@@ -7,11 +7,11 @@ Bug Trail is a single Go binary with two jobs:
 1. **It ships a skill** (`skill/bug-trail/`, embedded in the binary) that any agent can follow.
    The agent reads the issue, its comments, linked PRs and commits, works out the story, and writes
    one JSON file in the [`bug-trail/v1` format](skill/bug-trail/FORMAT.md).
-2. **It runs a local dashboard** that watches the folder those files go into and draws each one as
-   a **code-flow map**. Columns are the parts of the system (app, libraries, services, storage),
-   and steps run in execution order with the file and function behind each. The map marks where
-   the bug starts, how it spreads, where the user sees it, and where the fix landed. The
-   investigation (hypotheses, evidence, PRs) sits below as a timeline.
+2. **It runs a local dashboard** that draws each trail as a **system map**: the components the bug
+   passes through as boxes grouped by module, with every step pinned under its box. The map shows
+   **both flows in one graph**: the correct logic in green and what the code does now in red,
+   split from the steps they share. Pick a **case** (a concrete input) to light up the route it
+   takes through each flow, with what should happen and what does happen side by side.
 
 The binary never calls an AI model itself. Any agent (Claude Code, Codex, Cursor, your own script)
 writes the file; the dashboard only reads it.
@@ -109,11 +109,12 @@ The web UI and the skill are embedded with `go:embed`, so after editing anything
 
 ## Using the map
 
-- **Starts in / Seen as** chips at the top jump straight to the origin and the symptom.
-- **Follow the bug** walks the bug path from origin to symptom, one step at a time.
-- **Click a step** to open its details: file and line, the code snippet, why it matters, the fix,
-  and links to GitHub. Esc or ✕ closes it.
-- **Hover** a step to highlight what calls it and what it calls.
+- **Cases** at the top: pick an input to light up the route it takes. Above the map, **Should**
+  and **Does now** give the two outcomes in one line each.
+- **Green pills and arrows** are the correct logic, **red** is what the code does now, grey is
+  shared. "bug starts" and "user sees" flags mark where it goes wrong and where it shows up.
+- **Click a step** to open its file and line, the code snippet, why it matters, the fix, and
+  links to GitHub. **Follow the bug** walks the red path one step at a time. Esc closes.
 - Links like `#/t/<trail>/<step>` open a trail with that step selected.
 
 ## Layout
