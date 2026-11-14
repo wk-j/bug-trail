@@ -23,6 +23,10 @@ Write to `$BUG_TRAIL_DIR/OWNER__REPO__N.json`. If `BUG_TRAIL_DIR` is unset, use
 `~/.bug-trail/trails/` (create it). Overwrite an earlier trail for the same issue: the file is the
 latest analysis.
 
+If `BUG_TRAIL_SERVER` is set, the dashboard runs on a shared server. Still write and validate the
+file locally as above, then upload it in step 4. The file name, without `.json`, becomes the
+trail's id on the server.
+
 ## Steps
 
 1. **Gather the facts.** Collect everything before you start writing.
@@ -88,6 +92,13 @@ latest analysis.
    Warnings are allowed, but read them: most mean a
    node is missing its source link or is not connected.
 
+   If `BUG_TRAIL_SERVER` is set, upload it (this uses `BUG_TRAIL_TOKEN`):
+   ```bash
+   bug-trail push "$BUG_TRAIL_DIR/OWNER__REPO__N.json"
+   ```
+   It prints the trail's URL on the server. If it fails with 401, the token is wrong. Tell the
+   user; never guess a token or look for one elsewhere.
+
 5. **Report back** in two or three sentences: the root cause (or that it is unknown), the
-   status, the path of the file you wrote, and that it is visible in the dashboard
-   (`bug-trail serve`, default http://localhost:4317).
+   status, the path of the file you wrote, and where to see it: the URL `bug-trail push` printed,
+   or the local dashboard (`bug-trail serve`, default http://localhost:4317).

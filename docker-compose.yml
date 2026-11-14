@@ -1,0 +1,33 @@
+# Bug Trail server.
+#
+#   cp .env.example .env      # then set BUG_TRAIL_TOKEN to a long random string
+#   docker compose up -d --build
+#
+# Dashboard: http://<host>:${BUG_TRAIL_PORT:-4317}
+# Agents upload with: BUG_TRAIL_SERVER=http://<host>:4317 BUG_TRAIL_TOKEN=... bug-trail push FILE
+
+services:
+  bug-trail:
+    build:
+      context: .
+      args:
+        VERSION: ${BUG_TRAIL_VERSION:-dev}
+    image: bug-trail:${BUG_TRAIL_VERSION:-dev}
+    container_name: bug-trail
+    restart: unless-stopped
+    ports:
+      # Set BUG_TRAIL_BIND=127.0.0.1 in .env when a reverse proxy on this host terminates TLS.
+      - "${BUG_TRAIL_BIND:-0.0.0.0}:${BUG_TRAIL_PORT:-4317}:4317"
+    environment:
+      # Required: uploads are refused without it, and compose stops here if it is unset.
+      BUG_TRAIL_TOKEN: "${BUG_TRAIL_TOKEN:?Set BUG_TRAIL_TOKEN in .env, e.g. openssl rand -hex 32}"
+    volumes:
+      - trails:/data
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  trails:

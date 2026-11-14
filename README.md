@@ -44,11 +44,56 @@ rewrites it.
 
 To see the examples without running an agent: `bug-trail serve --dir examples`.
 
+## Deploy as a shared server (Docker Compose)
+
+Run one dashboard for the whole team. Agents on any machine upload their trails to it.
+
+```bash
+cp .env.example .env
+# set BUG_TRAIL_TOKEN in .env, for example to the output of: openssl rand -hex 32
+docker compose up -d --build
+```
+
+The dashboard is on port 4317. Trails live in the `trails` Docker volume, so they survive restarts
+and upgrades.
+
+On each machine where an agent runs, install `bug-trail` and the skill, then point it at the
+server:
+
+```bash
+export BUG_TRAIL_SERVER=http://your-server:4317
+export BUG_TRAIL_TOKEN=the-token-from-.env
+```
+
+With `BUG_TRAIL_SERVER` set, the skill writes the trail locally, validates it, and uploads it with
+`bug-trail push`. You can push files by hand too: `bug-trail push trails/*.json`.
+
+**What the server exposes.** Reading (the dashboard and `GET /api/…`) is open to anyone who can
+reach the port. Writing (`PUT` and `DELETE /api/trails/{id}`) needs the bearer token, and the
+server rejects files with format errors. If the trails should be private, put the server behind a
+reverse proxy that adds TLS and login (Caddy, nginx, Traefik, Cloudflare Access, a VPN). Set
+`BUG_TRAIL_BIND=127.0.0.1` in `.env` so only that proxy can reach it. Live updates use server-sent
+events, so turn off response buffering for `/events` in the proxy.
+
+The image is a static binary on `distroless/static:nonroot`, with no shell, running as a
+non-root user and a read-only root filesystem. `bug-trail healthcheck` drives the Docker health
+check.
+
+| Endpoint | Auth | |
+|---|---|---|
+| `GET /api/trails` | – | list trails |
+| `GET /api/trails/{id}` | – | one trail plus its validation result |
+| `PUT /api/trails/{id}` | Bearer token | create (201) or replace (200); 422 if invalid |
+| `DELETE /api/trails/{id}` | Bearer token | remove (204) |
+| `GET /events` | – | server-sent events, `data: {"id": …}` on every change |
+| `GET /healthz` | – | health check |
+
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `bug-trail serve [--dir DIR] [--port N] [--open]` | Run the dashboard and watch `DIR` for trail files. |
+| `bug-trail serve [--dir DIR] [--host ADDR] [--port N] [--open]` | Run the dashboard and watch `DIR` for trail files. With `BUG_TRAIL_TOKEN` set, it also accepts uploads. |
+| `bug-trail push [--server URL] [--token T] <file.json>…` | Validate files and upload them to a server (`BUG_TRAIL_SERVER`, `BUG_TRAIL_TOKEN`). |
 | `bug-trail install-skill [--project PATH \| --to DIR]` | Install the skill globally, into a project's `.claude/skills`, or into another agent's skills folder. |
 | `bug-trail skill` | Print the skill and format docs, for agents without skill support. |
 | `bug-trail prompt <issue-url>` | Print a ready-to-paste prompt for any agent. |

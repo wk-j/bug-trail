@@ -4,9 +4,11 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -23,9 +25,15 @@ import (
 
 var idRE = regexp.MustCompile(`^[\w.-]+$`)
 
+// MaxUpload caps the size of an uploaded trail.
+const MaxUpload = 5 << 20
+
 type Server struct {
 	Dir string
 	Web fs.FS // contents of web/: index.html, app.js, style.css
+	// Token enables PUT/DELETE /api/trails/{id} for clients that send
+	// "Authorization: Bearer <Token>". Empty means the API is read-only.
+	Token string
 
 	mu      sync.Mutex
 	clients map[chan string]struct{}
@@ -138,11 +146,95 @@ func (s *Server) handler() http.Handler {
 		}
 		writeJSON(w, 200, t)
 	})
+	mux.HandleFunc("PUT /api/trails/{id}", s.authorized(s.putTrail))
+	mux.HandleFunc("DELETE /api/trails/{id}", s.authorized(s.deleteTrail))
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		if _, err := os.Stat(s.Dir); err != nil {
+			writeJSON(w, 503, map[string]string{"status": "trails folder missing"})
+			return
+		}
+		writeJSON(w, 200, map[string]string{"status": "ok"})
+	})
 	mux.HandleFunc("GET /events", s.events)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 404, map[string]string{"error": "Not found"})
 	})
 	return mux
+}
+
+func (s *Server) authorized(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.Token == "" {
+			writeJSON(w, 403, map[string]string{"error": "uploads are disabled: start the server with BUG_TRAIL_TOKEN set"})
+			return
+		}
+		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || subtle.ConstantTimeCompare([]byte(got), []byte(s.Token)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="bug-trail"`)
+			writeJSON(w, 401, map[string]string{"error": "missing or wrong token"})
+			return
+		}
+		id := r.PathValue("id")
+		if !idRE.MatchString(id) {
+			writeJSON(w, 400, map[string]string{"error": "trail id may only contain letters, digits, '_', '-' and '.'"})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// putTrail stores a trail after validating it. Files with format errors are
+// rejected so the dashboard only ever shows trails that render.
+func (s *Server) putTrail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxUpload))
+	if err != nil {
+		writeJSON(w, 413, map[string]string{"error": fmt.Sprintf("trail is larger than %d bytes", MaxUpload)})
+		return
+	}
+	_, res := format.ValidateJSON(raw)
+	if len(res.Errors) > 0 {
+		writeJSON(w, 422, map[string]any{"error": "trail has format errors", "validation": res})
+		return
+	}
+	file := filepath.Join(s.Dir, id+".json")
+	_, existed := os.Stat(file)
+	// Write to a temp file and rename, so readers never see half a file.
+	tmp, err := os.CreateTemp(s.Dir, ".upload-*")
+	if err == nil {
+		_, err = tmp.Write(raw)
+		if cerr := tmp.Close(); err == nil {
+			err = cerr
+		}
+		if err == nil {
+			err = os.Rename(tmp.Name(), file)
+		}
+		if err != nil {
+			_ = os.Remove(tmp.Name())
+		}
+	}
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	status := 200
+	if existed != nil {
+		status = 201
+	}
+	writeJSON(w, status, map[string]any{"id": id, "url": "/#/t/" + id, "validation": res})
+}
+
+func (s *Server) deleteTrail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := os.Remove(filepath.Join(s.Dir, id+".json")); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			writeJSON(w, 404, map[string]string{"error": fmt.Sprintf("No trail %q", id)})
+			return
+		}
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(204)
 }
 
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +246,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // let nginx-style proxies stream events
 	_, _ = fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
 

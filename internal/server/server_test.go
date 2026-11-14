@@ -105,3 +105,64 @@ func TestEventsOnFileChange(t *testing.T) {
 		}
 	}
 }
+
+func do(t *testing.T, method, url, token, body string) *http.Response {
+	t.Helper()
+	req, _ := http.NewRequest(method, url, strings.NewReader(body))
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	return res
+}
+
+func TestUploads(t *testing.T) {
+	s, ts, _ := newTestServer(t)
+	good, _ := os.ReadFile("../../examples/example__photo-sync__142.json")
+	url := ts.URL + "/api/trails/o__r__1"
+
+	if c := do(t, "PUT", url, "x", string(good)).StatusCode; c != 403 {
+		t.Fatalf("no server token: want 403, got %d", c)
+	}
+	s.Token = "secret"
+	if c := do(t, "PUT", url, "", string(good)).StatusCode; c != 401 {
+		t.Fatalf("missing token: want 401, got %d", c)
+	}
+	if c := do(t, "PUT", url, "wrong", string(good)).StatusCode; c != 401 {
+		t.Fatalf("wrong token: want 401, got %d", c)
+	}
+	if c := do(t, "PUT", url, "secret", `{"format":"nope"}`).StatusCode; c != 422 {
+		t.Fatalf("invalid trail: want 422, got %d", c)
+	}
+	if c := do(t, "PUT", ts.URL+"/api/trails/bad%20id", "secret", string(good)).StatusCode; c != 400 {
+		t.Fatalf("bad id: want 400, got %d", c)
+	}
+	if c := do(t, "PUT", url, "secret", string(good)).StatusCode; c != 201 {
+		t.Fatalf("create: want 201, got %d", c)
+	}
+	if c := do(t, "PUT", url, "secret", string(good)).StatusCode; c != 200 {
+		t.Fatalf("update: want 200, got %d", c)
+	}
+	if b, _ := os.ReadFile(filepath.Join(s.Dir, "o__r__1.json")); string(b) != string(good) {
+		t.Fatal("stored file differs from upload")
+	}
+	if left, _ := filepath.Glob(filepath.Join(s.Dir, ".upload-*")); len(left) != 0 {
+		t.Fatalf("temp files left behind: %v", left)
+	}
+	if c := do(t, "PUT", url, "secret", strings.Repeat(" ", MaxUpload+1)).StatusCode; c != 413 {
+		t.Fatalf("oversize: want 413, got %d", c)
+	}
+	if c := do(t, "DELETE", url, "secret", "").StatusCode; c != 204 {
+		t.Fatalf("delete: want 204, got %d", c)
+	}
+	if c := do(t, "DELETE", url, "secret", "").StatusCode; c != 404 {
+		t.Fatalf("delete again: want 404, got %d", c)
+	}
+	if c := do(t, "GET", ts.URL+"/healthz", "", "").StatusCode; c != 200 {
+		t.Fatalf("healthz: want 200, got %d", c)
+	}
+}

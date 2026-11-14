@@ -1,0 +1,7 @@
+.git
+.env
+bin/
+dist/
+.DS_Store
+*.md
+!skill/**/*.md
