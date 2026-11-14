@@ -48,10 +48,13 @@ async function getJSON(url) {
 let view = null; // { id, selected, storyIdx }
 
 async function route() {
-  const m = location.hash.match(/^#\/t\/(.+)$/);
+  // #/t/<trail> or #/t/<trail>/<step>: a link can point at one step of a trail.
+  const m = location.hash.match(/^#\/t\/([^/]+)(?:\/(.+))?$/);
   if (m) {
     const id = decodeURIComponent(m[1]);
-    if (view?.id !== id) view = { id, selected: null, storyIdx: -1 };
+    const step = m[2] ? decodeURIComponent(m[2]) : null;
+    if (view?.id !== id) view = { id, selected: step, storyIdx: -1 };
+    else if (step) view.selected = step;
     await showTrail(true);
   } else {
     view = null;
@@ -158,10 +161,9 @@ async function showTrail(fresh) {
       ${banner(validation)}
     </section>
 
-    <div class="layout">
-      <section class="panel">
+    <section class="panel map-panel">
         <div class="panel-head">
-          <h2>Trail map</h2>
+          <h2>Trail map <span class="hint">Click a step for details · Esc to close</span></h2>
           ${story.length ? `
             <div class="story" aria-label="Step through the story">
               <button class="btn" id="prev">← Back</button>
@@ -175,10 +177,11 @@ async function showTrail(fresh) {
           ${legendItem('default', 'leads to / other')}
           <span>✓ confirmed · ~ likely · dashed = open · <s>struck</s> = ruled out</span>
         </div>
-        <div class="map-scroll"><div class="map" id="map"></div></div>
-      </section>
-      <aside class="panel detail" id="detail"></aside>
-    </div>
+        <div class="map-wrap" id="mapwrap">
+          <div class="map-scroll"><div class="map" id="map"></div></div>
+          <aside class="detail" id="detail" hidden aria-label="Step details"></aside>
+        </div>
+    </section>
 
     <div class="lower">
       <section class="panel">
@@ -202,6 +205,7 @@ async function showTrail(fresh) {
   map.addEventListener('click', (e) => {
     const el = e.target.closest('.node');
     if (el) select(el.dataset.id, story);
+    else if (view.selected) select(null, story, false); // click on empty map closes the drawer
   });
   map.addEventListener('keydown', (e) => {
     const el = e.target.closest('.node');
@@ -222,15 +226,20 @@ async function showTrail(fresh) {
   }
 
   if (keep) { const s = document.querySelector('.map-scroll'); s.scrollLeft = keep.x; s.scrollTop = keep.y; }
-  select(view.selected, story, false);
+  select(view.selected, story, fresh && !!view.selected);
 }
 
-// Links to other nodes (detail panel, timeline) select that node.
+const currentStory = () => (trail?.story ?? []).filter((id) => nodeById.has(id));
+
+// Links to other nodes (detail panel, timeline) select that node; ✕ closes the drawer.
 app.addEventListener('click', (e) => {
+  if (!trail || !view) return;
+  if (e.target.closest('[data-close]')) return select(null, currentStory(), false);
   const b = e.target.closest('[data-jump]');
-  if (!b || !trail) return;
-  const story = (trail.story ?? []).filter((id) => nodeById.has(id));
-  select(b.dataset.jump, story, true);
+  if (b) select(b.dataset.jump, currentStory(), true);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && view?.selected && trail) select(null, currentStory(), false);
 });
 
 function banner(v) {
@@ -275,7 +284,7 @@ let COL_W = 236, NODE_W = 204;
 // Columns stretch to fill the panel, down to a readable minimum (then the map scrolls).
 function sizeColumns(map) {
   const avail = map.parentElement.clientWidth;
-  COL_W = Math.max(204, Math.min(280, Math.floor(avail / LANES.length)));
+  COL_W = Math.max(204, Math.min(360, Math.floor(avail / LANES.length)));
   NODE_W = COL_W - PAD_X * 2;
 }
 
@@ -332,17 +341,17 @@ function drawMap(map, nodes, edges, story) {
         ${n.at || n.actor ? `<div class="m">${esc(fmtDate(n.at))}${n.at && n.actor ? ' · ' : ''}${esc(n.actor ?? '')}</div>` : ''}
       </div>`).join('')}`;
 
-  // Measure, then stack each lane and centre it vertically.
+  // Measure, then stack each lane from the top so the map uses the space it has.
   const els = new Map([...map.querySelectorAll('.node')].map((el) => [el.dataset.id, el]));
   const colH = lanes.map((col) => col.reduce((s, n) => s + els.get(n.id).offsetHeight, 0) + Math.max(0, col.length - 1) * GAP);
   const inner = Math.max(120, ...colH);
   const box = new Map();
   lanes.forEach((col, li) => {
-    let y = TOP + (inner - colH[li]) / 2;
+    let y = TOP;
     if (col.length === 0) {
       const ph = document.createElement('div');
       ph.className = 'lane-empty';
-      ph.style.cssText = `left:${li * COL_W + PAD_X}px;top:${TOP + inner / 2 - 22}px;width:${NODE_W}px`;
+      ph.style.cssText = `left:${li * COL_W + PAD_X}px;top:${TOP}px;width:${NODE_W}px`;
       ph.textContent = LANES[li].id === 'cause' ? 'Root cause not found yet' : 'Nothing here yet';
       map.appendChild(ph);
     }
@@ -423,14 +432,18 @@ function select(id, story, scroll = true) {
   view.selected = id && nodeById.has(id) ? id : null;
   const si = story.indexOf(view.selected);
   if (si !== -1) view.storyIdx = si;
+  // Keep the address shareable without adding a history entry per click.
+  const hash = `#/t/${encodeURIComponent(view.id)}${view.selected ? `/${encodeURIComponent(view.selected)}` : ''}`;
+  if (location.hash !== hash) history.replaceState(null, '', hash);
   document.querySelectorAll('.node.sel').forEach((el) => el.classList.remove('sel'));
+  // Open or close the drawer first, so scrolling accounts for the space it covers.
+  renderDetail(story);
   const el = view.selected && document.querySelector(`.node[data-id="${CSS.escape(view.selected)}"]`);
   if (el) {
     el.classList.add('sel');
     if (scroll) el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   }
   focus(view.selected);
-  renderDetail(story);
   updateStoryControls(story);
 }
 
@@ -452,20 +465,14 @@ function updateStoryControls(story) {
 
 function renderDetail(story) {
   const panel = document.getElementById('detail');
+  const wrap = document.getElementById('mapwrap');
   const n = view.selected && nodeById.get(view.selected);
-  if (!n) {
-    const counts = LANES.map((l) => [l, trail.nodes.filter((x) => KIND_LANE[x?.kind] === l.id).length]);
-    panel.innerHTML = `
-      <div class="panel-head"><h2>Details</h2></div>
-      <div class="placeholder">
-        <p>Click a step on the map to see what happened, the evidence behind it, and the links to GitHub.</p>
-        ${story.length ? '<p>Or press <b>Start story</b> to walk through the main storyline in order.</p>' : ''}
-        <ul>${counts.map(([l, c]) => `<li class="lane-${l.id}"><span class="rel">${c}</span>${l.label}</li>`).join('')}</ul>
-      </div>`;
-    return;
-  }
+  panel.hidden = !n;
+  wrap.classList.toggle('drawer-open', !!n);
+  if (!n) { panel.innerHTML = ''; return; }
   const lane = KIND_LANE[n.kind];
   const adj = adjacency.get(n.id);
+  const laneLabel = LANES.find((l) => l.id === lane).label;
   const conn = (e, other, dir) => {
     const o = nodeById.get(other);
     const rel = dir === 'out' ? human(e.relation) : `← ${human(e.relation)}`;
@@ -473,9 +480,12 @@ function renderDetail(story) {
   };
   const step = story.indexOf(n.id);
   panel.innerHTML = `
-    <div class="panel-head"><h2>Details</h2>${step !== -1 ? `<span class="pill">Story step ${step + 1}</span>` : ''}</div>
+    <div class="panel-head"><h2>Details</h2>
+      <span class="head-right">${step !== -1 ? `<span class="pill">Story step ${step + 1}</span>` : ''}
+        <button class="btn" data-close aria-label="Close details">✕</button></span>
+    </div>
     <div class="body lane-${lane}">
-      <div class="kind">${esc(KIND_LABEL[n.kind])} · ${esc(LANES.find((l) => l.id === lane).label)}</div>
+      <div class="kind">${esc(KIND_LABEL[n.kind])}${KIND_LABEL[n.kind] !== laneLabel ? ` · ${esc(laneLabel)}` : ''}</div>
       <h3>${inline(n.title)}</h3>
       <div class="meta">
         ${n.status ? `<span class="pill ${{ confirmed: 'ok', done: 'ok', likely: 'info', open: 'warn', rejected: 'bad' }[n.status] ?? ''}">${esc(n.status)}</span>` : ''}
