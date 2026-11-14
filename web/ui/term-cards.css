@@ -1,0 +1,15 @@
+/* TermCards: small index cards filed side by side. */
+.ui-glossary { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.ui-glossary__card {
+  margin: 0; padding: 8px 12px 10px; border-radius: 3px; align-content: start; display: grid; gap: 3px;
+  background:
+    linear-gradient(180deg, transparent 28px, rgba(205, 70, 60, .5) 28px 29px, transparent 29px),
+    repeating-linear-gradient(180deg, transparent 0 20px, rgba(64, 110, 175, .14) 20px 21px),
+    #fffefb;
+  background-position: 0 0, 0 29px, 0 0;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .18), 0 3px 6px rgba(0, 0, 0, .14);
+}
+.ui-glossary__card:nth-child(3n+1) { transform: rotate(-.4deg); }
+.ui-glossary__card:nth-child(3n+2) { transform: rotate(.35deg); }
+.ui-glossary dt { font-weight: 800; color: var(--ink); line-height: 20px; }
+.ui-glossary dd { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 21px; }

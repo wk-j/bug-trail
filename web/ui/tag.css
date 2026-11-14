@@ -1,0 +1,53 @@
+/* Tag: embossed label-maker tape, paper labels and luggage tags. */
+.ui-tag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* Label-maker tape: coloured plastic with raised white letters. */
+.ui-tag--label {
+  --tape-c: #33302c;
+  padding: 2px 10px; border-radius: 3px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tape-c) 82%, #fff) 0%, var(--tape-c) 45%, color-mix(in srgb, var(--tape-c) 80%, #000) 100%);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .22);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+.ui-tag--label.ui-tone--ok { --tape-c: #2f6f34; }
+.ui-tag--label.ui-tone--info { --tape-c: #2d4f8f; }
+.ui-tag--label.ui-tone--warn { --tape-c: #a06a08; }
+.ui-tag--label.ui-tone--bad { --tape-c: #9e2a22; }
+.ui-tag--label.ui-tone--plain { --tape-c: #3b3833; }
+
+/* Paper label: a scrap of paper with field: value. */
+.ui-tag--paper {
+  padding: 2px 8px; font-size: 12.5px; color: var(--ink-2); border-radius: 2px;
+  background: var(--paper); box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+}
+.ui-tag--paper i { color: var(--ink-faint); }
+.ui-tag--paper code { background: none; box-shadow: none; padding: 0; }
+
+/* Luggage tag: manila card with a reinforced hole and a string. */
+.ui-tag--luggage {
+  position: relative; padding: 5px 12px 5px 26px; font-size: 13px; color: var(--ink);
+  border: 1px solid var(--manila-edge); border-radius: 3px 10px 10px 3px; cursor: pointer;
+  background: linear-gradient(180deg, #f2e2b6, var(--manila-2));
+  box-shadow: 0 2px 3px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .5);
+  max-width: 460px; overflow: hidden; text-overflow: ellipsis;
+}
+.ui-tag--luggage::before {
+  content: ""; position: absolute; left: 9px; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%;
+  background: var(--paper-2); box-shadow: 0 0 0 2px #c9b07a, inset 0 1px 2px rgba(0, 0, 0, .4);
+}
+.ui-tag--luggage:hover { background: linear-gradient(180deg, #f7ead0, #e8d29d); }
+.ui-tag--luggage.ui-tone--bad { border-left: 5px solid var(--yarn-red); }
+.ui-tag--luggage.ui-tone--warn { border-left: 5px solid #d08a12; }
+.ui-tag--luggage code { background: none; box-shadow: none; padding: 0; }
+
+/* Meter: a recessed brass-rimmed track. */
+.ui-meter { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.ui-meter__track {
+  width: 74px; height: 9px; border-radius: 5px; overflow: hidden;
+  background: linear-gradient(180deg, #4b4237, #6d6356); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .55), 0 0 0 1px #b79d62, 0 1px 0 rgba(255, 255, 255, .6);
+}
+.ui-meter__track i {
+  display: block; height: 100%;
+  background: linear-gradient(180deg, #9fdc8e, #3f9a3a 60%, #2c7a2a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5);
+}

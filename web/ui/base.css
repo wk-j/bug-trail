@@ -1,0 +1,33 @@
+/* Page base: the desk the papers lie on, and plain typography. */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--tex-wood);
+  background-attachment: fixed;
+  font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--ink-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  font-family: var(--mono); font-size: .9em; padding: 1px 5px; border-radius: 3px;
+  background: rgba(120, 95, 60, .1); box-shadow: inset 0 0 0 1px rgba(120, 95, 60, .12);
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid rgba(43, 76, 155, .55); outline-offset: 2px; }
+h1, h2, h3, h4 { margin: 0; color: var(--ink); }
+
+main { padding: 26px 24px 60px; max-width: 1720px; margin: 0 auto; display: grid; gap: 28px; }
+@media (max-width: 640px) { main { padding: 18px 12px 40px; gap: 20px; } }
+
+/* Shared small pieces */
+.ui-muted { color: var(--ink-3); }
+.ui-foot { color: rgba(255, 240, 215, .72); font-size: 12px; text-align: center; }
+.ui-foot code { background: rgba(0, 0, 0, .2); box-shadow: none; color: inherit; }
+.linkish { background: none; border: 0; padding: 0; color: var(--ink-link); cursor: pointer; text-align: left; }
+.linkish:hover { text-decoration: underline; }
+
+/* Glossary terms linked anywhere on the page */
+.ui-term { text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 3px; cursor: help; }

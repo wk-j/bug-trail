@@ -1,0 +1,17 @@
+/* Plaque: brass screwed to the desk. */
+.ui-plaque {
+  position: relative; justify-self: start; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  padding: 10px 34px; border-radius: 5px; color: #3b2a08;
+  background: linear-gradient(180deg, #f6e2a4 0%, #d9b662 45%, #ad8634 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75), inset 0 -2px 0 rgba(0, 0, 0, .25), 0 3px 6px rgba(0, 0, 0, .5);
+  text-shadow: 0 1px 0 rgba(255, 245, 210, .7);
+}
+.ui-plaque::before, .ui-plaque::after {
+  content: ""; position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff3c4, #8a6a26 70%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .3);
+}
+.ui-plaque::before { left: 11px; } .ui-plaque::after { right: 11px; }
+.ui-plaque h1 { font-size: 20px; letter-spacing: .12em; text-transform: uppercase; color: #3b2a08; }
+.ui-plaque__sub { font-size: 12.5px; color: #5b4518; }
+.ui-plaque__sub code { background: rgba(255, 255, 255, .3); box-shadow: none; }

@@ -1,0 +1,8 @@
+/* Layout helpers shared by pages. */
+.ui-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 34px 26px; align-items: start; }
+.ui-split { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 26px; align-items: start; }
+@media (max-width: 960px) { .ui-split { grid-template-columns: minmax(0, 1fr); } }
+.ui-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ui-stack { display: grid; gap: 10px; }
+.ui-prose { font-size: 15px; line-height: 1.7; max-width: 1000px; }
+.ui-prose p { margin: 0 0 10px; }

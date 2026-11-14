@@ -1,0 +1,36 @@
+/* The evidence board: kraft sheets for groups, yarn for flows. Fonts are left to the browser. */
+.flow { position: relative; }
+.board { position: relative; }
+.board-measure { position: absolute; visibility: hidden; left: -9999px; top: 0; }
+.board-measure .ui-note { position: relative; height: auto; }
+
+/* A kraft-paper sheet pinned behind a module's cards, labelled on masking tape. */
+.board-group {
+  position: absolute; border-radius: 2px; background: var(--tex-kraft);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, .25), 0 8px 16px rgba(0, 0, 0, .18);
+}
+.board-group__tape {
+  position: absolute; top: 6px; left: 14px; padding: 2px 14px; font-size: 12.5px; font-weight: 700; color: var(--ink-2);
+  background: var(--tape); transform: rotate(-1.5deg); box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+}
+
+/* Yarn: a soft cord with a twist and a shadow on the cork. */
+.board-yarn { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.board-strand {
+  fill: none; stroke: var(--yarn-plain); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(1px 2px 1.2px rgba(0, 0, 0, .4)); transition: opacity .15s;
+}
+.board-strand.w-bug { stroke: var(--yarn-red); stroke-width: 3; }
+.board-strand.w-ok { stroke: var(--yarn-green); stroke-width: 3; }
+.board-strand.w-conc { stroke: var(--yarn-blue); stroke-dasharray: 6 5; }
+.board-strand.dashed { stroke-dasharray: 6 5; }
+.board-strand.off { opacity: .15; }
+.board-strand.hl { stroke-width: 4; }
+.flow.focus .board-strand:not(.hl) { opacity: .15; }
+.board-head path { fill: var(--yarn-plain); }
+.board-head.w-bug path { fill: var(--yarn-red); }
+.board-head.w-ok path { fill: var(--yarn-green); }
+.board-head.w-conc path { fill: var(--yarn-blue); }
+
+/* A plain thread from a card down through its notes. */
+.board-thread { stroke: rgba(70, 45, 20, .55); stroke-width: 1.2; stroke-dasharray: 1 3; stroke-linecap: round; }

@@ -1,0 +1,111 @@
+/* Materials and tokens shared by every component. The look is physical: a wooden desk, paper,
+   manila folders, a cork board, sticky notes and coloured yarn. No font families are named
+   here apart from code; text uses the browser's system font. */
+:root {
+  color-scheme: light;
+
+  /* ink */
+  --ink: #2b2219;
+  --ink-2: #4a3d2f;
+  --ink-3: #75654f;
+  --ink-faint: #9c8b74;
+  --ink-link: #1f468f;
+
+  /* desk */
+  --desk: #4a2d19;
+  --desk-hi: #6b4428;
+  --desk-lo: #2f1b0e;
+
+  /* paper and card stock */
+  --paper: #fcf9f2;
+  --paper-2: #f3ecdd;
+  --paper-edge: #ddd2bb;
+  --rule-blue: rgba(64, 110, 175, .2);
+  --rule-red: rgba(205, 70, 60, .45);
+  --legal: #fbf1b7;
+  --manila: #ecd8a6;
+  --manila-2: #e0c78c;
+  --manila-edge: #b99a5c;
+  --kraft: #d7b680;
+  --kraft-2: #c9a46c;
+
+  /* cork board */
+  --cork: #c79c64;
+  --cork-dark: rgba(92, 56, 22, .38);
+  --cork-light: rgba(255, 238, 205, .32);
+  --frame: #7a4a25;
+  --frame-hi: #a26a3c;
+  --frame-lo: #4d2c13;
+
+  /* metal and tape */
+  --metal: #d7dadf;
+  --metal-2: #a3a9b1;
+  --metal-3: #6f757d;
+  --tape: rgba(243, 234, 199, .82);
+
+  /* sticky notes */
+  --note-yellow: #fff0a3;
+  --note-green: #d4efb4;
+  --note-pink: #ffd4c9;
+  --note-orange: #ffd79e;
+  --note-blue: #d6e6fb;
+
+  /* yarn on the board */
+  --yarn-red: #b3251d;
+  --yarn-green: #2e7a32;
+  --yarn-plain: #7a6b58;
+  --yarn-blue: #3b67a8;
+
+  /* stamp inks */
+  --ink-red: #b3261e;
+  --ink-green: #2a7a2e;
+  --ink-blue: #2b4c9b;
+  --ink-amber: #9a6200;
+  --ink-grey: #5f5a53;
+
+  /* depth */
+  --shadow-paper: 0 1px 1px rgba(0, 0, 0, .18), 0 8px 18px rgba(0, 0, 0, .28);
+  --shadow-lift: 0 2px 3px rgba(0, 0, 0, .2), 0 14px 28px rgba(0, 0, 0, .34);
+  --shadow-note: 0 1px 1px rgba(0, 0, 0, .18), 2px 5px 7px rgba(0, 0, 0, .2);
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, .28);
+  --bevel: inset 0 1px 0 rgba(255, 255, 255, .75), inset 0 -1px 0 rgba(0, 0, 0, .12);
+
+  --radius: 6px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* textures */
+  --tex-wood:
+    repeating-linear-gradient(91deg, rgba(255, 255, 255, .035) 0 2px, transparent 2px 11px),
+    repeating-linear-gradient(89deg, rgba(0, 0, 0, .09) 0 1px, transparent 1px 27px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .05) 0 7px, transparent 7px 61px),
+    linear-gradient(180deg, #5a381f, #3d2412);
+  --tex-paper:
+    radial-gradient(rgba(120, 95, 60, .05) 1px, transparent 1.2px) 0 0 / 5px 5px,
+    linear-gradient(180deg, #fdfaf4, #f6f0e2);
+  --tex-cork:
+    radial-gradient(var(--cork-dark) 1px, transparent 1.6px) 0 0 / 7px 7px,
+    radial-gradient(var(--cork-light) 1px, transparent 1.6px) 3px 4px / 11px 11px,
+    radial-gradient(rgba(110, 66, 26, .28) 1.6px, transparent 2.2px) 6px 2px / 17px 17px,
+    linear-gradient(180deg, #cda26a, #bf9259);
+  --tex-kraft:
+    repeating-linear-gradient(12deg, rgba(110, 75, 30, .07) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(-8deg, rgba(255, 245, 220, .12) 0 1px, transparent 1px 9px),
+    linear-gradient(180deg, #dcbc86, #cfaa72);
+  --tex-leather:
+    radial-gradient(rgba(0, 0, 0, .12) 1px, transparent 1.4px) 0 0 / 4px 4px,
+    linear-gradient(180deg, #6a3a22, #4a2615);
+
+  /* legacy lane colours (investigation kinds) */
+  --lane-reported: #3b5bb5;
+  --lane-observed: #b06f0a;
+  --lane-investigated: #6b46b8;
+  --lane-cause: #b3251d;
+  --lane-resolution: #2a7a2e;
+  --lane-verified: #1d7c7c;
+}
+.lane-reported { --lane: var(--lane-reported); }
+.lane-observed { --lane: var(--lane-observed); }
+.lane-investigated { --lane: var(--lane-investigated); }
+.lane-cause { --lane: var(--lane-cause); }
+.lane-resolution { --lane: var(--lane-resolution); }
+.lane-verified { --lane: var(--lane-verified); }

@@ -1,0 +1,26 @@
+/* Legend: the key to the board, drawn with the same materials. */
+.ui-legend { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+.ui-legend__item { display: inline-flex; align-items: center; gap: 7px; }
+.ui-legend__hint { margin-left: auto; color: var(--ink-3); font-style: italic; }
+.ui-sw { display: inline-block; font-style: normal; }
+.ui-sw--yarn-red, .ui-sw--yarn-green, .ui-sw--yarn-plain {
+  width: 30px; height: 3px; border-radius: 2px; box-shadow: 0 1px 1px rgba(0, 0, 0, .35);
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, .25) 0 2px, transparent 2px 4px), var(--sw-c);
+}
+.ui-sw--yarn-red { --sw-c: var(--yarn-red); }
+.ui-sw--yarn-green { --sw-c: var(--yarn-green); }
+.ui-sw--yarn-plain { --sw-c: var(--yarn-plain); }
+.ui-sw--note-yellow, .ui-sw--note-green, .ui-sw--note-pink, .ui-sw--note-orange, .ui-sw--note-blue {
+  width: 14px; height: 14px; border-radius: 1px 1px 5px 1px; box-shadow: 1px 2px 2px rgba(0, 0, 0, .25); background: var(--sw-c);
+}
+.ui-sw--note-yellow { --sw-c: var(--note-yellow); }
+.ui-sw--note-green { --sw-c: var(--note-green); }
+.ui-sw--note-pink { --sw-c: var(--note-pink); }
+.ui-sw--note-orange { --sw-c: var(--note-orange); }
+.ui-sw--note-blue { --sw-c: var(--note-blue); }
+.ui-sw--flag-bad, .ui-sw--flag-warn {
+  font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 0 5px;
+  border: 1.5px solid currentColor; border-radius: 3px; transform: rotate(-4deg);
+}
+.ui-sw--flag-bad { color: var(--ink-red); }
+.ui-sw--flag-warn { color: var(--ink-amber); }

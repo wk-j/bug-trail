@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -135,8 +137,6 @@ func (s *Server) handler() http.Handler {
 		}
 	}
 	mux.HandleFunc("GET /{$}", static("index.html", "text/html; charset=utf-8"))
-	mux.HandleFunc("GET /app.js", static("app.js", "text/javascript; charset=utf-8"))
-	mux.HandleFunc("GET /style.css", static("style.css", "text/css; charset=utf-8"))
 	mux.HandleFunc("GET /format.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
@@ -168,6 +168,32 @@ func (s *Server) handler() http.Handler {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /events", s.events)
+	// Everything else under web/ (components, pages, styles) is served as a static file.
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		if !fs.ValidPath(name) || strings.HasPrefix(path.Base(name), ".") {
+			writeJSON(w, 404, map[string]string{"error": "Not found"})
+			return
+		}
+		b, err := fs.ReadFile(s.Web, name)
+		if err != nil {
+			writeJSON(w, 404, map[string]string{"error": "Not found"})
+			return
+		}
+		ctype := mime.TypeByExtension(path.Ext(name))
+		switch path.Ext(name) {
+		case ".js":
+			ctype = "text/javascript; charset=utf-8"
+		case ".css":
+			ctype = "text/css; charset=utf-8"
+		}
+		if ctype == "" {
+			ctype = "application/octet-stream"
+		}
+		w.Header().Set("Content-Type", ctype)
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(b)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 404, map[string]string{"error": "Not found"})
 	})

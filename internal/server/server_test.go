@@ -25,7 +25,11 @@ func newTestServer(t *testing.T) (*Server, *httptest.Server, context.CancelFunc)
 		t.Fatal(err)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "broken.json"), []byte("{nope"), 0o644)
-	s := &Server{Dir: dir, Web: fstest.MapFS{"index.html": {Data: []byte("<html>")}}, clients: map[chan string]struct{}{}}
+	s := &Server{Dir: dir, Web: fstest.MapFS{
+		"index.html":    {Data: []byte("<html>")},
+		"ui/button.js":  {Data: []byte("export const x = 1;")},
+		"ui/tokens.css": {Data: []byte(":root{}")},
+	}, clients: map[chan string]struct{}{}}
 	ctx, cancel := context.WithCancel(context.Background())
 	go s.watch(ctx)
 	ts := httptest.NewServer(s.handler())
@@ -67,6 +71,16 @@ func TestAPI(t *testing.T) {
 	var missing map[string]string
 	if code := getJSON(t, ts.URL+"/api/trails/..%2fetc", &missing); code != 404 {
 		t.Fatalf("path traversal id: want 404, got %d", code)
+	}
+	for path, want := range map[string]string{"/ui/button.js": "javascript", "/ui/tokens.css": "text/css"} {
+		r, _ := http.Get(ts.URL + path)
+		if r.StatusCode != 200 || !strings.Contains(r.Header.Get("Content-Type"), want) {
+			t.Fatalf("%s: %d %s", path, r.StatusCode, r.Header.Get("Content-Type"))
+		}
+		r.Body.Close()
+	}
+	if r, _ := http.Get(ts.URL + "/ui/missing.js"); r.StatusCode != 404 {
+		t.Fatalf("missing static file: want 404, got %d", r.StatusCode)
 	}
 	res, _ := http.Get(ts.URL + "/format.js")
 	if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Type"), "javascript") {

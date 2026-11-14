@@ -1,0 +1,18 @@
+/* Stamp: rubber-stamp ink, slightly uneven, rotated. */
+.ui-stamp {
+  --ink-c: var(--ink-red);
+  display: inline-block; transform: rotate(var(--tilt, -7deg));
+  color: var(--ink-c); border: 3px double var(--ink-c); border-radius: 6px;
+  font-weight: 800; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap;
+  opacity: .82; mix-blend-mode: multiply;
+  -webkit-mask-image: radial-gradient(circle at 30% 40%, #000 55%, rgba(0, 0, 0, .55) 56%, #000 64%),
+    repeating-radial-gradient(circle at 70% 30%, #000 0 2px, rgba(0, 0, 0, .65) 2px 3px);
+  -webkit-mask-composite: source-in; mask-composite: intersect;
+}
+.ui-stamp--lg { font-size: 20px; padding: 4px 14px; }
+.ui-stamp--sm { font-size: 11px; padding: 1px 7px; border-width: 2px; border-style: solid; letter-spacing: .08em; }
+.ui-stamp.ui-tone--ok { --ink-c: var(--ink-green); }
+.ui-stamp.ui-tone--info { --ink-c: var(--ink-blue); }
+.ui-stamp.ui-tone--warn { --ink-c: var(--ink-amber); }
+.ui-stamp.ui-tone--bad { --ink-c: var(--ink-red); }
+.ui-stamp.ui-tone--plain { --ink-c: var(--ink-grey); }

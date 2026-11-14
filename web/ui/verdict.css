@@ -1,0 +1,5 @@
+/* Verdict: a stamped label followed by the outcome, written on the strip. */
+.ui-verdict { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; line-height: 1.5; }
+.ui-verdict .ui-stamp { flex: none; }
+.ui-verdict--ok > span { color: #1f4f22; }
+.ui-verdict--bad > span { color: #6e1a14; }

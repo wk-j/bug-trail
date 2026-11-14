@@ -1,0 +1,47 @@
+/* StickyNote: square paper notes with a slight curl. Text uses the browser's font. */
+.ui-note {
+  --note-c: var(--note-yellow);
+  position: absolute; z-index: 3; display: flex; align-items: flex-start; gap: 7px;
+  padding: 5px 8px 6px 5px; border-radius: 1px 1px 10px 1px; font-size: 12.5px; line-height: 15px; color: var(--ink);
+  background: linear-gradient(175deg, color-mix(in srgb, var(--note-c) 70%, #fff) 0%, var(--note-c) 30%, color-mix(in srgb, var(--note-c) 88%, #8a6a2a) 100%);
+  box-shadow: var(--shadow-note);
+  transform: rotate(var(--tilt, 0deg));
+  cursor: pointer; transition: opacity .15s, box-shadow .15s, transform .15s;
+}
+.ui-note:hover { box-shadow: 0 2px 3px rgba(0, 0, 0, .2), 4px 10px 14px rgba(0, 0, 0, .25); transform: rotate(0deg) translateY(-1px); }
+/* Curled corner */
+.ui-note::after {
+  content: ""; position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; border-radius: 0 0 10px 0;
+  background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, .12) 50%, rgba(255, 255, 255, .5) 75%);
+}
+.ui-note__n {
+  flex: none; min-width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; color: var(--ink-2); border: 1.5px solid currentColor;
+}
+.ui-note__text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ui-note__text code { font-family: inherit; background: rgba(255, 255, 255, .45); box-shadow: none; padding: 0 3px; }
+.ui-note__flag {
+  flex: none; align-self: center; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  padding: 0 5px; border: 1.5px solid currentColor; border-radius: 3px; transform: rotate(-4deg); opacity: .85;
+}
+.ui-note__flag.ui-tone--bad { color: var(--ink-red); }
+.ui-note__flag.ui-tone--warn { color: var(--ink-amber); }
+.ui-note__flag.ui-tone--ok { color: var(--ink-green); }
+
+.ui-note--yellow { --note-c: var(--note-yellow); }
+.ui-note--green { --note-c: var(--note-green); }
+.ui-note--pink { --note-c: var(--note-pink); }
+.ui-note--orange { --note-c: var(--note-orange); }
+.ui-note--blue { --note-c: var(--note-blue); }
+.ui-note--green .ui-note__n { color: var(--ink-green); }
+.ui-note--pink .ui-note__n, .ui-note--orange .ui-note__n { color: var(--ink-red); }
+
+/* Where it goes wrong / shows up: a heavier marker outline. */
+.ui-note.role-origin { box-shadow: 0 0 0 2.5px var(--yarn-red), var(--shadow-note); }
+.ui-note.role-symptom { box-shadow: 0 0 0 2.5px #c98510, var(--shadow-note); }
+.ui-note--blue { border: 1.5px dashed rgba(59, 103, 168, .6); }
+
+/* States */
+.ui-note.sel { box-shadow: 0 0 0 3px rgba(43, 76, 155, .8), var(--shadow-note); transform: rotate(0deg) scale(1.03); z-index: 5; }
+.ui-note.off { opacity: .2; }
+.flow.focus .ui-note:not(.hl) { opacity: .28; }

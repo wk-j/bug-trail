@@ -1,0 +1,17 @@
+/* Tabs: manila index tabs standing on a shelf; the chosen one is raised and joins the shelf. */
+.ui-tabs { display: flex; align-items: flex-end; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid var(--manila-edge); padding-left: 4px; }
+.ui-tabs__label { align-self: center; margin-right: 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.ui-tab {
+  position: relative; bottom: -2px; cursor: pointer; padding: 6px 14px 5px; font-size: 13px; color: var(--ink-2);
+  border: 1px solid var(--manila-edge); border-bottom: 0; border-radius: 9px 9px 0 0;
+  background: linear-gradient(180deg, #ead6a2, var(--manila-2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45);
+  transition: transform .1s;
+}
+.ui-tab:hover { background: linear-gradient(180deg, #f1e0b5, #e6cf98); }
+.ui-tab.is-active {
+  padding-top: 9px; color: var(--ink); font-weight: 700; z-index: 1;
+  background: linear-gradient(180deg, #f7ebc8, var(--manila));
+  border-bottom: 2px solid var(--manila); box-shadow: 0 -2px 4px rgba(0, 0, 0, .12), inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+.ui-tab code { background: none; box-shadow: none; padding: 0; }

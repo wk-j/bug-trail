@@ -1,0 +1,21 @@
+/* Button: an ivory key with a bevel; it sinks when pressed. */
+.ui-btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+  border: 1px solid #a8987c; border-radius: 7px; padding: 5px 13px; font-size: 13px; font-weight: 600;
+  color: var(--ink-2);
+  background: linear-gradient(180deg, #fffdf6 0%, #efe6d2 55%, #e2d5b9 100%);
+  box-shadow: var(--bevel), 0 2px 0 #b9a888, 0 3px 5px rgba(0, 0, 0, .25);
+  transition: transform .06s, box-shadow .06s;
+}
+.ui-btn:hover:not(:disabled) { background: linear-gradient(180deg, #ffffff 0%, #f5edda 55%, #e9ddc2 100%); }
+.ui-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, .2), 0 0 0 #b9a888, 0 1px 2px rgba(0, 0, 0, .2);
+}
+.ui-btn:disabled { opacity: .5; cursor: default; }
+.ui-btn[hidden] { display: none; }
+.ui-btn--key { padding: 4px 9px; min-width: 30px; justify-content: center; }
+.ui-btn--flat {
+  background: none; border-color: transparent; box-shadow: none; padding: 4px 8px; color: inherit;
+}
+.ui-btn--flat:hover:not(:disabled) { background: rgba(0, 0, 0, .06); }

@@ -1,0 +1,53 @@
+/* Sheet: paper on the desk. Variants change the stock. */
+.ui-sheet {
+  position: relative; min-width: 0; padding: 22px 26px 24px; border-radius: 2px;
+  background: var(--tex-paper); box-shadow: var(--shadow-paper);
+}
+.ui-sheet__head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ui-sheet__head h2 { font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); }
+.ui-sheet__sub { color: var(--ink-3); font-size: 13px; }
+.ui-sheet__actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Masking tape holding the sheet down. */
+.ui-sheet--taped::before, .ui-sheet--taped::after {
+  content: ""; position: absolute; top: -10px; width: 92px; height: 24px; background: var(--tape);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+}
+.ui-sheet--taped::before { left: 28px; transform: rotate(-4deg); }
+.ui-sheet--taped::after { right: 28px; transform: rotate(5deg); }
+
+/* Notebook: blue rules, red margin, punched holes. */
+.ui-sheet--notebook {
+  padding-left: 64px;
+  background:
+    linear-gradient(90deg, transparent 47px, var(--rule-red) 47px 49px, transparent 49px),
+    repeating-linear-gradient(180deg, transparent 0 25px, var(--rule-blue) 25px 26px),
+    var(--paper);
+  background-position: 0 0, 0 12px, 0 0;
+}
+.ui-sheet--notebook::before {
+  content: ""; position: absolute; left: 14px; top: 26px; bottom: 26px; width: 16px;
+  background: radial-gradient(circle, #5a3a22 0 5px, rgba(0, 0, 0, .18) 5.5px, transparent 7px) 0 0 / 16px 92px repeat-y;
+}
+
+/* Legal pad: yellow, ruled, with a gummed top. */
+.ui-sheet--legal {
+  padding-top: 34px;
+  background:
+    linear-gradient(180deg, #8a2b20 0 12px, #6d1f16 12px 14px, transparent 14px),
+    linear-gradient(90deg, transparent 38px, var(--rule-red) 38px 39px, transparent 39px 42px, var(--rule-red) 42px 43px, transparent 43px),
+    repeating-linear-gradient(180deg, transparent 0 25px, rgba(70, 110, 170, .28) 25px 26px),
+    var(--legal);
+  background-position: 0 0, 0 0, 0 22px, 0 0;
+  padding-left: 58px;
+}
+
+/* Index card: white stock, a blue header rule and a red line. */
+.ui-sheet--card {
+  background:
+    linear-gradient(180deg, transparent 46px, rgba(205, 70, 60, .5) 46px 47px, transparent 47px),
+    repeating-linear-gradient(180deg, transparent 0 23px, rgba(64, 110, 175, .16) 23px 24px),
+    #fffefb;
+  background-position: 0 0, 0 47px, 0 0;
+  border-radius: 4px;
+}

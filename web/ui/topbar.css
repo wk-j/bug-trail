@@ -1,0 +1,25 @@
+/* Topbar: a stitched leather strip with a brass name plate and an indicator lamp. */
+.topbar {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px; background: var(--tex-leather);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .45), inset 0 -1px 0 rgba(0, 0, 0, .4);
+}
+.topbar::after {
+  content: ""; position: absolute; inset: 4px 6px; border: 1.5px dashed rgba(255, 224, 170, .4); border-radius: 3px; pointer-events: none;
+}
+.brand {
+  display: inline-flex; align-items: center; gap: 9px; padding: 3px 14px 3px 8px; border-radius: 4px;
+  font-weight: 800; letter-spacing: .06em; color: #3b2a08; text-shadow: 0 1px 0 rgba(255, 245, 210, .6);
+  background: linear-gradient(180deg, #f3dd9a 0%, #d6b25c 45%, #b38c3a 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 2px 3px rgba(0, 0, 0, .5);
+}
+.brand:hover { text-decoration: none; }
+.brand .b1 { fill: #2b4c9b; } .brand .b2 { fill: #2a7a2e; } .brand .b3 { fill: #b3261e; }
+.brand .bl { stroke: #5b4518; stroke-width: 2; fill: none; }
+.live { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: rgba(255, 235, 200, .8); }
+.live::before {
+  content: ""; width: 11px; height: 11px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #d9d4cc 0 2px, #7d776f 6px);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .4), 0 0 0 2px #2a170c;
+}
+.live.on::before { background: radial-gradient(circle at 35% 30%, #eaffe6 0 2px, #4fd64a 4px, #1d8a1a 7px); box-shadow: 0 0 8px 2px rgba(80, 220, 80, .6), 0 0 0 2px #2a170c; }
