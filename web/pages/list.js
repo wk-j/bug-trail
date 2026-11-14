@@ -23,7 +23,7 @@ export async function renderList(app) {
       body: `<div class="ui-prose">
         <p>Ask any agent to trace an issue with the <b>bug-trail</b> skill. Its map is pinned up here as soon as it writes the file.</p>
         <p><code>Use the bug-trail skill to analyze https://github.com/OWNER/REPO/issues/123</code></p>
-        <p>If your agent doesn't have the skill yet: <code>bug-trail install-skill</code></p>
+        <p>If your agent doesn't have the skill yet: <code>bug-trail skill setup</code></p>
       </div>`,
     });
     return;

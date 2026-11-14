@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/wk-j/bug-trail/internal/config"
 	"github.com/wk-j/bug-trail/internal/format"
 	"github.com/wk-j/bug-trail/internal/server"
 )
@@ -38,12 +39,27 @@ var skillFiles embed.FS
 
 var version = "0.2.0"
 
-func defaultDir() string {
-	if d := os.Getenv("BUG_TRAIL_DIR"); d != "" {
-		return d
-	}
+// builtinDir is the trails folder when nothing else is set.
+func builtinDir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".bug-trail", "trails")
+}
+
+// defaultDir is the trails folder: BUG_TRAIL_DIR, else the config file's dir, else ~/.bug-trail/trails.
+func defaultDir() string {
+	v, err := config.Resolve("dir", "", builtinDir())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "warning:", err)
+		return builtinDir()
+	}
+	return v.Value
+}
+
+// setting resolves a flag value against its env var and the config file; a broken config file
+// is an error rather than a silent fallback.
+func setting(name, flagValue string) (string, error) {
+	v, err := config.Resolve(name, flagValue, "")
+	return v.Value, err
 }
 
 func usage(w io.Writer) {
@@ -55,24 +71,23 @@ Usage:
       With BUG_TRAIL_TOKEN set, it also accepts uploads from `+"`bug-trail push`"+`.
   bug-trail push [--server URL] [--token T] <file.json> [...]
       Validate trail files and upload them to a Bug Trail server
-      (defaults: BUG_TRAIL_SERVER, BUG_TRAIL_TOKEN).
+      (server and token from "bug-trail config", or BUG_TRAIL_SERVER / BUG_TRAIL_TOKEN).
+  bug-trail config list|get|set|unset|path
+      Store the server, token and trails folder so you don't need environment variables.
   bug-trail healthcheck [URL]
       Exit 0 if the server is healthy (used by Docker).
-  bug-trail install-skill [--project PATH | --to DIR]
-      Copy the bug-trail skill so agents can use it.
-        (default)        ~/.claude/skills/bug-trail
-        --project PATH   PATH/.claude/skills/bug-trail
-        --to DIR         DIR/bug-trail (for other agents' skill folders)
-  bug-trail skill
-      Print the skill instructions and the format (for agents without skill support).
+  bug-trail skill status|setup|remove|show [flags]
+      Set up coding agents (Claude Code, Codex, OpenCode, Pi) to use Bug Trail:
+      report, install or remove the skill, or print the guide it gives agents.
+      Run "bug-trail skill" for details.
   bug-trail prompt <issue-url>
       Print a prompt you can give any agent to analyze that issue.
   bug-trail validate <file.json> [...]
-      Check trail files against the bug-trail/v1 format.
+      Check trail files against the bug-trail format.
   bug-trail version
 
 Trails folder: %s
-  (set BUG_TRAIL_DIR to change it; agents read the same variable)
+  (change it with "bug-trail config set dir PATH" or BUG_TRAIL_DIR)
 `, version, defaultDir())
 }
 
@@ -86,10 +101,12 @@ func main() {
 	switch cmd {
 	case "serve":
 		err = cmdServe(args)
-	case "install-skill":
-		err = cmdInstallSkill(args)
 	case "skill":
-		err = cmdSkill()
+		err = cmdSkill(args)
+	case "config":
+		err = cmdConfig(args)
+	case "install-skill":
+		err = errors.New(`"install-skill" was replaced by "bug-trail skill setup"`)
 	case "prompt":
 		err = cmdPrompt(args)
 	case "validate":
@@ -129,7 +146,10 @@ func cmdServe(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	token := os.Getenv("BUG_TRAIL_TOKEN")
+	token, err := setting("token", "")
+	if err != nil {
+		return err
+	}
 	url := fmt.Sprintf("http://localhost:%d", *port)
 	s := &server.Server{Dir: abs, Web: web, Token: token}
 	err = s.ListenAndServe(ctx, net.JoinHostPort(*host, strconv.Itoa(*port)), func() {
@@ -166,22 +186,28 @@ func envInt(key string, def int) int {
 // cmdPush validates trail files locally, then uploads them to a Bug Trail server.
 func cmdPush(args []string) error {
 	fl := flag.NewFlagSet("push", flag.ExitOnError)
-	srv := fl.String("server", os.Getenv("BUG_TRAIL_SERVER"), "server URL, e.g. https://bugs.example.com (or BUG_TRAIL_SERVER)")
-	token := fl.String("token", "", "upload token (default: BUG_TRAIL_TOKEN)")
+	srvFlag := fl.String("server", "", "server URL, e.g. https://bugs.example.com (default: BUG_TRAIL_SERVER or config)")
+	tokenFlag := fl.String("token", "", "upload token (default: BUG_TRAIL_TOKEN or config)")
 	_ = fl.Parse(args)
-	if *token == "" {
-		*token = os.Getenv("BUG_TRAIL_TOKEN")
-	}
 	files := fl.Args()
-	switch {
-	case len(files) == 0:
+	if len(files) == 0 {
 		return errors.New("usage: bug-trail push [--server URL] [--token T] <file.json> [...]")
-	case *srv == "":
-		return errors.New("no server: pass --server or set BUG_TRAIL_SERVER")
-	case *token == "":
-		return errors.New("no token: pass --token or set BUG_TRAIL_TOKEN")
 	}
-	base := strings.TrimRight(*srv, "/")
+	server, err := setting("server", *srvFlag)
+	if err != nil {
+		return err
+	}
+	tok, err := setting("token", *tokenFlag)
+	if err != nil {
+		return err
+	}
+	switch {
+	case server == "":
+		return errors.New(`no server: run "bug-trail config set server URL", set BUG_TRAIL_SERVER, or pass --server`)
+	case tok == "":
+		return errors.New(`no token: run "bug-trail config set token", set BUG_TRAIL_TOKEN, or pass --token`)
+	}
+	base := strings.TrimRight(server, "/")
 	client := &http.Client{Timeout: 30 * time.Second}
 	failed := false
 	for _, file := range files {
@@ -193,7 +219,7 @@ func cmdPush(args []string) error {
 			}
 		}
 		if err == nil {
-			err = putTrail(client, base, *token, id, raw)
+			err = putTrail(client, base, tok, id, raw)
 		}
 		if err != nil {
 			fmt.Printf("✗ %s: %v\n", file, err)
@@ -266,58 +292,12 @@ func openBrowser(url string) {
 	_ = c.Start()
 }
 
-func cmdInstallSkill(args []string) error {
-	fl := flag.NewFlagSet("install-skill", flag.ExitOnError)
-	project := fl.String("project", "", "install into PATH/.claude/skills/bug-trail")
-	to := fl.String("to", "", "install into DIR/bug-trail")
-	fl.Bool("global", true, "install into ~/.claude/skills/bug-trail (default)")
-	_ = fl.Parse(args)
-
-	var dest string
-	switch {
-	case *to != "":
-		dest = filepath.Join(*to, "bug-trail")
-	case *project != "":
-		dest = filepath.Join(*project, ".claude", "skills", "bug-trail")
-	default:
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		dest = filepath.Join(home, ".claude", "skills", "bug-trail")
-	}
-	dest, _ = filepath.Abs(dest)
-
-	src, _ := fs.Sub(skillFiles, "skill/bug-trail")
-	// Clear the old copy so files removed from the skill do not linger.
-	if err := os.RemoveAll(dest); err != nil {
-		return err
-	}
-	if err := os.CopyFS(dest, src); err != nil {
-		return err
-	}
-	fmt.Printf("Installed the bug-trail skill to %s\n", dest)
-	fmt.Printf("Agents without skill support can run `bug-trail skill` or read %s.\n", filepath.Join(dest, "SKILL.md"))
-	return nil
-}
-
-func cmdSkill() error {
-	for _, name := range []string{"SKILL.md", "FORMAT.md"} {
-		b, err := skillFiles.ReadFile("skill/bug-trail/" + name)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("%s\n\n", b)
-	}
-	return nil
-}
-
 func cmdPrompt(args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: bug-trail prompt <issue-url>")
 	}
 	fmt.Printf(`Analyze the GitHub issue %s and write a bug trail.
-Use the "bug-trail" skill if you have it; otherwise run `+"`bug-trail skill`"+` and follow the instructions it prints.
+Use the "bug-trail" skill if you have it; otherwise run `+"`bug-trail skill show`"+` and follow the guide it prints.
 Write the result to %s and run `+"`bug-trail validate`"+` on it before you finish.
 `, args[0], defaultDir())
 	return nil

@@ -25,11 +25,17 @@ This skill works for any agent that can run shell commands. It needs `gh` (logge
 
 ## Output location
 
-Write to `$BUG_TRAIL_DIR/OWNER__REPO__N.json`. If `BUG_TRAIL_DIR` is unset, use
-`~/.bug-trail/trails/` (create it). Overwrite an earlier trail for the same issue.
+Ask the CLI where trails go, and whether a shared server is configured. Both come from the
+user's `bug-trail config` file or environment variables, so don't look for them yourself:
 
-If `BUG_TRAIL_SERVER` is set, the dashboard runs on a shared server. Still write and validate the
-file locally, then upload it in step 5. The file name without `.json` becomes the trail's id.
+```bash
+TRAILS="$(bug-trail config get dir)"; mkdir -p "$TRAILS"
+bug-trail config get server   # prints a URL if trails are uploaded to a shared server
+```
+
+Write to `"$TRAILS/OWNER__REPO__N.json"`, overwriting an earlier trail for the same issue. If a
+server is configured, still write and validate the file locally, then upload it in step 5. The
+file name without `.json` becomes the trail's id.
 
 ## Steps
 
@@ -88,7 +94,8 @@ patterns (`grep -rn "store(" --include='*.go'`).
 
 ### 3. Write the trail
 
-Follow [FORMAT.md](FORMAT.md). The rules that matter most:
+Follow the bug-trail/v2 format, printed after this guide by `bug-trail skill show`. The rules that
+matter most:
 
 - **Write in the issue's language** (or the one the user asks for), and set `language` to its
   tag, such as `"th"`. That covers titles, details, background, cases and next steps. Keep code
@@ -135,18 +142,19 @@ Follow [FORMAT.md](FORMAT.md). The rules that matter most:
 ### 4. Validate
 
 ```bash
-bug-trail validate "$BUG_TRAIL_DIR/OWNER__REPO__N.json"
+bug-trail validate "$TRAILS/OWNER__REPO__N.json"
 ```
 Fix every error. Read the warnings: they usually mean a bug-path step has no code location, or
 no step is marked `origin` or `symptom`.
 
-### 5. Upload (only if `BUG_TRAIL_SERVER` is set)
+### 5. Upload (only if `bug-trail config get server` printed a URL)
 
 ```bash
-bug-trail push "$BUG_TRAIL_DIR/OWNER__REPO__N.json"
+bug-trail push "$TRAILS/OWNER__REPO__N.json"
 ```
-It prints the trail's URL. On a 401 the token is wrong: tell the user. Never guess a token or
-look for one elsewhere.
+It uses the configured server and token, and prints the trail's URL. On a 401 the token is wrong,
+and if it says no token is set: tell the user to run `bug-trail config set token`. Never guess a
+token, print it, or look for one elsewhere.
 
 ### 6. Report back
 
