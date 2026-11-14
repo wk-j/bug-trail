@@ -313,6 +313,7 @@ function drawFlow(el) {
   COL_W = Math.max(230, Math.min(380, Math.floor(avail / n)));
   const nodeW = COL_W - PAD_X * 2;
   const width = Math.max(avail, n * COL_W);
+  el.parentElement.classList.toggle('fits', n * COL_W <= avail);
   const offset = Math.floor((width - n * COL_W) / 2); // centre when there is spare room
 
   // Rows read left to right, then top to bottom. A step joins the current row

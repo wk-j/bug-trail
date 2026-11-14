@@ -191,8 +191,11 @@ main { padding: 20px; margin: 0 auto; }
 .sw.fix { width: 12px; height: 12px; background: var(--fix); border-radius: 3px; border: 0; }
 .sw.conc { border-top: 2px dashed var(--conc); }
 
-/* The map gets the window height; everything above it scrolls away. */
-.flow-scroll { overflow: auto; position: relative; max-height: calc(100vh - 150px); min-height: 320px; }
+/* The map is as tall as it needs to be and the page scrolls; there's no inner scrollbar.
+   It scrolls sideways only when the columns can't fit (then .fits is off). */
+.flow-scroll { overflow-x: auto; overflow-y: hidden; position: relative; }
+.flow-scroll.fits { overflow: visible; }
+.flow-scroll.fits .flow-head { top: 43px; } /* stick under the top bar while the page scrolls */
 .flow { position: relative; }
 .flow-head {
   position: sticky; top: 0; z-index: 4; height: 64px; background: var(--surface);
@@ -281,8 +284,8 @@ marker.w-conc path { fill: var(--conc); }
 @keyframes drawer-in { from { transform: translateX(24px); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
 /* Leave room to scroll the map out from under the drawer. */
-body.drawer-open .flow-scroll { scroll-padding-right: min(440px, 100vw); }
-body.drawer-open .flow { box-sizing: content-box; padding-right: min(440px, 100vw); }
+body.drawer-open .flow-scroll:not(.fits) { scroll-padding-right: min(440px, 100vw); }
+body.drawer-open .flow-scroll:not(.fits) .flow { box-sizing: content-box; padding-right: min(440px, 100vw); }
 .drawer-head {
   position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px;
   padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border);
