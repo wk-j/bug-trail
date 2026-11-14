@@ -53,6 +53,8 @@ type trailSummary struct {
 	Summary    any    `json:"summary"`
 	AnalyzedAt any    `json:"analyzed_at"`
 	Nodes      int    `json:"nodes"`
+	Steps      int    `json:"steps"`
+	Origin     any    `json:"origin"` // the flow step where the bug starts, if any
 	Errors     int    `json:"errors"`
 }
 
@@ -87,6 +89,16 @@ func (s *Server) listTrails() []trailSummary {
 			sum.Issue, sum.Summary, sum.AnalyzedAt = m["issue"], m["summary"], m["analyzed_at"]
 			if n, ok := m["nodes"].([]any); ok {
 				sum.Nodes = len(n)
+			}
+			if f, ok := m["flow"].(map[string]any); ok {
+				steps, _ := f["steps"].([]any)
+				sum.Steps = len(steps)
+				for _, sv := range steps {
+					if st, ok := sv.(map[string]any); ok && st["role"] == "origin" {
+						sum.Origin = map[string]any{"id": st["id"], "title": st["title"], "location": st["location"]}
+						break
+					}
+				}
 			}
 		}
 		out = append(out, sum)

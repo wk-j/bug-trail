@@ -8,8 +8,10 @@ Bug Trail is a single Go binary with two jobs:
    The agent reads the issue, its comments, linked PRs and commits, works out the story, and writes
    one JSON file in the [`bug-trail/v1` format](skill/bug-trail/FORMAT.md).
 2. **It runs a local dashboard** that watches the folder those files go into and draws each one as
-   a map: six columns (Reported → Observed → Investigated → Root cause → Resolution → Verified),
-   with arrows for how each step led to the next. Ruled-out ideas stay on the map, struck through.
+   a **code-flow map**. Columns are the parts of the system (app, libraries, services, storage),
+   and steps run in execution order with the file and function behind each. The map marks where
+   the bug starts, how it spreads, where the user sees it, and where the fix landed. The
+   investigation (hypotheses, evidence, PRs) sits below as a timeline.
 
 The binary never calls an AI model itself. Any agent (Claude Code, Codex, Cursor, your own script)
 writes the file; the dashboard only reads it.
@@ -107,10 +109,12 @@ The web UI and the skill are embedded with `go:embed`, so after editing anything
 
 ## Using the map
 
-- **Click a step** to see its detail, its sources on GitHub and what it connects to.
-- **Start story** walks the main storyline (the trail's `story` list) one step at a time.
-- **Hover** a step to highlight its direct connections; hover an arrow to read the relation.
-- **Timeline** lists every dated step in order; click one to jump to it on the map.
+- **Starts in / Seen as** chips at the top jump straight to the origin and the symptom.
+- **Follow the bug** walks the bug path from origin to symptom, one step at a time.
+- **Click a step** to open its details: file and line, the code snippet, why it matters, the fix,
+  and links to GitHub. Esc or ✕ closes it.
+- **Hover** a step to highlight what calls it and what it calls.
+- Links like `#/t/<trail>/<step>` open a trail with that step selected.
 
 ## Layout
 

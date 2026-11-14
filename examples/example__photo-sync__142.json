@@ -1,5 +1,5 @@
 {
-  "format": "bug-trail/v1",
+  "format": "bug-trail/v2",
   "analyzed_at": "2026-11-14T09:30:00Z",
   "analyzed_by": "Hand-written example (fictional issue)",
   "issue": {
@@ -11,7 +11,11 @@
     "author": "mira-dev",
     "created_at": "2026-09-02T08:14:00Z",
     "closed_at": "2026-09-19T16:40:00Z",
-    "labels": ["bug", "uploads", "p1"]
+    "labels": [
+      "bug",
+      "uploads",
+      "p1"
+    ]
   },
   "summary": {
     "headline": "Uploads over 2 GB fail because the file size is stored in a 32-bit integer",
@@ -29,7 +33,12 @@
       "status": "confirmed",
       "at": "2026-09-02T08:14:00Z",
       "actor": "mira-dev",
-      "refs": [{ "label": "issue #142", "url": "https://github.com/example/photo-sync/issues/142" }]
+      "refs": [
+        {
+          "label": "issue #142",
+          "url": "https://github.com/example/photo-sync/issues/142"
+        }
+      ]
     },
     {
       "id": "env",
@@ -38,7 +47,12 @@
       "detail": "Three other users confirm the problem on Android 15 and on the Windows desktop client. Nobody can reproduce it on v3.7.",
       "status": "confirmed",
       "at": "2026-09-03T11:20:00Z",
-      "refs": [{ "label": "comment by tkato", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1001" }]
+      "refs": [
+        {
+          "label": "comment by tkato",
+          "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1001"
+        }
+      ]
     },
     {
       "id": "sym",
@@ -48,7 +62,12 @@
       "status": "confirmed",
       "at": "2026-09-04T09:02:00Z",
       "actor": "tkato",
-      "refs": [{ "label": "debug log in comment", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1002" }]
+      "refs": [
+        {
+          "label": "debug log in comment",
+          "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1002"
+        }
+      ]
     },
     {
       "id": "h-net",
@@ -58,7 +77,12 @@
       "status": "rejected",
       "at": "2026-09-04T10:30:00Z",
       "actor": "sam-maint",
-      "refs": [{ "label": "comment by sam-maint", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1003" }]
+      "refs": [
+        {
+          "label": "comment by sam-maint",
+          "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1003"
+        }
+      ]
     },
     {
       "id": "ev-zero",
@@ -68,7 +92,12 @@
       "status": "confirmed",
       "at": "2026-09-04T12:10:00Z",
       "actor": "tkato",
-      "refs": [{ "label": "comment by tkato", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1004" }]
+      "refs": [
+        {
+          "label": "comment by tkato",
+          "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1004"
+        }
+      ]
     },
     {
       "id": "h-overflow",
@@ -78,7 +107,12 @@
       "status": "confirmed",
       "at": "2026-09-05T08:45:00Z",
       "actor": "sam-maint",
-      "refs": [{ "label": "comment by sam-maint", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1005" }]
+      "refs": [
+        {
+          "label": "comment by sam-maint",
+          "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1005"
+        }
+      ]
     },
     {
       "id": "ev-bisect",
@@ -88,7 +122,12 @@
       "status": "confirmed",
       "at": "2026-09-08T14:00:00Z",
       "actor": "sam-maint",
-      "refs": [{ "label": "commit a1b2c3d", "url": "https://github.com/example/photo-sync/commit/a1b2c3d" }]
+      "refs": [
+        {
+          "label": "commit a1b2c3d",
+          "url": "https://github.com/example/photo-sync/commit/a1b2c3d"
+        }
+      ]
     },
     {
       "id": "rc",
@@ -97,7 +136,12 @@
       "detail": "The refactor copied the size into a new `ChunkPlan` struct whose `totalSize` field is `int32`. The old code used `int64` throughout. Any file of 2^31 bytes or more wraps negative, and `chunkCount = ceil(totalSize / chunkSize)` goes negative with it.",
       "status": "confirmed",
       "at": "2026-09-08T15:30:00Z",
-      "refs": [{ "label": "PR #151 description", "url": "https://github.com/example/photo-sync/pull/151" }]
+      "refs": [
+        {
+          "label": "PR #151 description",
+          "url": "https://github.com/example/photo-sync/pull/151"
+        }
+      ]
     },
     {
       "id": "code",
@@ -105,7 +149,12 @@
       "title": "core/upload/chunk_plan.go: totalSize int32",
       "detail": "`type ChunkPlan struct { totalSize int32; chunkSize int32 }`",
       "status": "confirmed",
-      "refs": [{ "label": "chunk_plan.go at a1b2c3d", "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/chunk_plan.go" }]
+      "refs": [
+        {
+          "label": "chunk_plan.go at a1b2c3d",
+          "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/chunk_plan.go"
+        }
+      ]
     },
     {
       "id": "wa",
@@ -114,7 +163,12 @@
       "detail": "Suggested while the fix was in review.",
       "status": "done",
       "at": "2026-09-09T09:00:00Z",
-      "refs": [{ "label": "comment by sam-maint", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1006" }]
+      "refs": [
+        {
+          "label": "comment by sam-maint",
+          "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1006"
+        }
+      ]
     },
     {
       "id": "pr",
@@ -124,7 +178,12 @@
       "status": "done",
       "at": "2026-09-17T10:05:00Z",
       "actor": "sam-maint",
-      "refs": [{ "label": "PR #151", "url": "https://github.com/example/photo-sync/pull/151" }]
+      "refs": [
+        {
+          "label": "PR #151",
+          "url": "https://github.com/example/photo-sync/pull/151"
+        }
+      ]
     },
     {
       "id": "ver-test",
@@ -133,7 +192,12 @@
       "detail": "`TestChunkPlanLargeFile` creates a sparse 3 GB file and checks the chunk count. It fails on v3.8.0 and passes with the fix.",
       "status": "done",
       "at": "2026-09-17T10:05:00Z",
-      "refs": [{ "label": "PR #151 tests", "url": "https://github.com/example/photo-sync/pull/151/files" }]
+      "refs": [
+        {
+          "label": "PR #151 tests",
+          "url": "https://github.com/example/photo-sync/pull/151/files"
+        }
+      ]
     },
     {
       "id": "ver-user",
@@ -142,30 +206,262 @@
       "status": "confirmed",
       "at": "2026-09-19T16:30:00Z",
       "actor": "mira-dev",
-      "refs": [{ "label": "comment by mira-dev", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1010" }]
+      "refs": [
+        {
+          "label": "comment by mira-dev",
+          "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1010"
+        }
+      ]
     }
   ],
   "edges": [
-    { "from": "report", "to": "sym", "relation": "leads_to", "note": "Debug logging requested to see the server response" },
-    { "from": "env", "to": "sym", "relation": "relates", "note": "Only v3.8.0+ is affected" },
-    { "from": "sym", "to": "h-net", "relation": "leads_to" },
-    { "from": "ev-zero", "to": "h-net", "relation": "refutes", "note": "Fails at 0 bytes, so no long transfer is involved" },
-    { "from": "sym", "to": "h-overflow", "relation": "leads_to", "note": "A negative chunk count is the clue" },
-    { "from": "ev-bisect", "to": "h-overflow", "relation": "supports" },
-    { "from": "h-overflow", "to": "rc", "relation": "leads_to" },
-    { "from": "code", "to": "rc", "relation": "causes" },
-    { "from": "rc", "to": "sym", "relation": "causes" },
-    { "from": "wa", "to": "report", "relation": "mitigates" },
-    { "from": "pr", "to": "rc", "relation": "fixes" },
-    { "from": "ver-test", "to": "pr", "relation": "verifies" },
-    { "from": "ver-user", "to": "pr", "relation": "verifies" }
+    {
+      "from": "report",
+      "to": "sym",
+      "relation": "leads_to",
+      "note": "Debug logging requested to see the server response"
+    },
+    {
+      "from": "env",
+      "to": "sym",
+      "relation": "relates",
+      "note": "Only v3.8.0+ is affected"
+    },
+    {
+      "from": "sym",
+      "to": "h-net",
+      "relation": "leads_to"
+    },
+    {
+      "from": "ev-zero",
+      "to": "h-net",
+      "relation": "refutes",
+      "note": "Fails at 0 bytes, so no long transfer is involved"
+    },
+    {
+      "from": "sym",
+      "to": "h-overflow",
+      "relation": "leads_to",
+      "note": "A negative chunk count is the clue"
+    },
+    {
+      "from": "ev-bisect",
+      "to": "h-overflow",
+      "relation": "supports"
+    },
+    {
+      "from": "h-overflow",
+      "to": "rc",
+      "relation": "leads_to"
+    },
+    {
+      "from": "code",
+      "to": "rc",
+      "relation": "causes"
+    },
+    {
+      "from": "rc",
+      "to": "sym",
+      "relation": "causes"
+    },
+    {
+      "from": "wa",
+      "to": "report",
+      "relation": "mitigates"
+    },
+    {
+      "from": "pr",
+      "to": "rc",
+      "relation": "fixes"
+    },
+    {
+      "from": "ver-test",
+      "to": "pr",
+      "relation": "verifies"
+    },
+    {
+      "from": "ver-user",
+      "to": "pr",
+      "relation": "verifies"
+    }
   ],
-  "story": ["report", "sym", "h-net", "ev-zero", "h-overflow", "ev-bisect", "rc", "pr", "ver-test", "ver-user"],
+  "story": [
+    "report",
+    "sym",
+    "h-net",
+    "ev-zero",
+    "h-overflow",
+    "ev-bisect",
+    "rc",
+    "pr",
+    "ver-test",
+    "ver-user"
+  ],
   "open_questions": [
     "Do other structs created in the v3.8.0 refactor also use int32 for byte counts?"
   ],
   "next_steps": [
     "Audit core/upload for other int32 size fields.",
     "Add a lint rule that flags int32 fields named *Size or *Bytes."
-  ]
+  ],
+  "flow": {
+    "title": "What happens when you upload a video from the phone",
+    "components": [
+      {
+        "id": "app",
+        "name": "Android app",
+        "detail": "apps/android",
+        "kind": "app"
+      },
+      {
+        "id": "core",
+        "name": "Upload core",
+        "detail": "core/upload",
+        "kind": "library"
+      },
+      {
+        "id": "api",
+        "name": "Sync API",
+        "detail": "server",
+        "kind": "service"
+      }
+    ],
+    "steps": [
+      {
+        "id": "share",
+        "component": "app",
+        "title": "User shares a 2.4 GB video",
+        "role": "normal",
+        "location": {
+          "path": "apps/android/src/ShareActivity.kt",
+          "symbol": "onShare",
+          "line": 48,
+          "url": "https://github.com/example/photo-sync/blob/a1b2c3d/apps/android/src/ShareActivity.kt#L48"
+        },
+        "detail": "The share sheet hands the file to `UploadWorker`, which calls the shared upload core."
+      },
+      {
+        "id": "start",
+        "component": "core",
+        "title": "Start upload, read file size",
+        "role": "normal",
+        "location": {
+          "path": "core/upload/uploader.go",
+          "symbol": "Start",
+          "line": 62,
+          "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/uploader.go#L62"
+        },
+        "detail": "`Start` stats the file (2,576,980,378 bytes) and builds a `ChunkPlan` from the size."
+      },
+      {
+        "id": "plan",
+        "component": "core",
+        "title": "Size stored in a 32-bit int",
+        "role": "origin",
+        "location": {
+          "path": "core/upload/chunk_plan.go",
+          "symbol": "ChunkPlan",
+          "line": 14,
+          "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/chunk_plan.go#L14"
+        },
+        "snippet": "type ChunkPlan struct {\n\ttotalSize int32 // was int64 before the v3.8.0 refactor\n\tchunkSize int32\n}",
+        "detail": "The v3.8.0 refactor moved chunk planning into `ChunkPlan` and declared `totalSize` as `int32`. Any file of 2^31 bytes or more wraps to a negative number here.",
+        "fix": {
+          "label": "PR #151: use int64",
+          "url": "https://github.com/example/photo-sync/pull/151",
+          "detail": "Changes `totalSize` to `int64` and rejects a non-positive chunk count before calling the server."
+        },
+        "refs": [
+          {
+            "label": "bisect result",
+            "url": "https://github.com/example/photo-sync/commit/a1b2c3d"
+          }
+        ]
+      },
+      {
+        "id": "count",
+        "component": "core",
+        "title": "Chunk count comes out negative",
+        "role": "propagates",
+        "location": {
+          "path": "core/upload/chunk_plan.go",
+          "symbol": "newChunkPlan",
+          "line": 31,
+          "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/chunk_plan.go#L31"
+        },
+        "snippet": "p.chunkCount = int32(math.Ceil(float64(p.totalSize) / float64(p.chunkSize)))",
+        "detail": "With a negative `totalSize`, `chunkCount` is -1048 for the reporter's file. Nothing checks it."
+      },
+      {
+        "id": "session",
+        "component": "api",
+        "title": "Server rejects the upload session",
+        "role": "propagates",
+        "location": {
+          "path": "server/sessions.go",
+          "symbol": "CreateSession",
+          "line": 77,
+          "url": "https://github.com/example/photo-sync/blob/a1b2c3d/server/sessions.go#L77"
+        },
+        "detail": "`POST /sessions` with `chunk_count: -1048` fails validation: HTTP 400 \"chunk_count must be positive\".",
+        "refs": [
+          {
+            "label": "debug log",
+            "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1002"
+          }
+        ]
+      },
+      {
+        "id": "toast",
+        "component": "app",
+        "title": "\"Upload failed, try again\" at 0%",
+        "role": "symptom",
+        "location": {
+          "path": "apps/android/src/UploadWorker.kt",
+          "symbol": "onFailure",
+          "line": 120,
+          "url": "https://github.com/example/photo-sync/blob/a1b2c3d/apps/android/src/UploadWorker.kt#L120"
+        },
+        "detail": "The worker shows a generic error for any failed session, so the reporter never sees the 400 message.",
+        "refs": [
+          {
+            "label": "issue #142",
+            "url": "https://github.com/example/photo-sync/issues/142"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "from": "share",
+        "to": "start",
+        "kind": "call",
+        "label": "UploadWorker.run()"
+      },
+      {
+        "from": "start",
+        "to": "plan",
+        "kind": "call",
+        "label": "newChunkPlan(size)"
+      },
+      {
+        "from": "plan",
+        "to": "count",
+        "kind": "data",
+        "label": "totalSize = -1,717,986,918"
+      },
+      {
+        "from": "count",
+        "to": "session",
+        "kind": "call",
+        "label": "POST /sessions"
+      },
+      {
+        "from": "session",
+        "to": "toast",
+        "kind": "error",
+        "label": "HTTP 400"
+      }
+    ]
+  }
 }

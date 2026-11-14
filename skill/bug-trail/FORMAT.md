@@ -1,20 +1,21 @@
-# bug-trail/v1 format
+# bug-trail/v2 format
 
 A trail is one UTF-8 JSON file per issue. `bug-trail validate FILE` checks it; this page explains
-the rules.
+the rules. The centrepiece is `flow`, the code path the bug takes, which the dashboard draws as
+the map. `nodes` and `edges` record the investigation around it.
 
 ## Top level
 
 | Field            | Type            | Required | Notes |
 |------------------|-----------------|----------|-------|
-| `format`         | `"bug-trail/v1"`| yes      | |
+| `format`         | `"bug-trail/v2"`| yes      | v1 files (no `flow`) still load, with a warning. |
 | `analyzed_at`    | ISO date-time   | yes      | When you wrote the analysis. |
 | `analyzed_by`    | string          | no       | Agent and model, for example `"Claude Code (claude-opus-5-5)"`. |
 | `issue`          | object          | yes      | See below. |
 | `summary`        | object          | yes      | See below. |
-| `nodes`          | Node[]          | yes      | At least one. |
-| `edges`          | Edge[]          | yes      | May be empty. |
-| `story`          | string[]        | no*      | Node ids of the main storyline, in order. *Warned if missing. |
+| `flow`           | object          | yes      | **The code path.** See below. |
+| `nodes`          | Node[]          | no       | The investigation: report, evidence, hypotheses, PRs, release. |
+| `edges`          | Edge[]          | no       | Links between investigation nodes. |
 | `open_questions` | string[]        | no       | Things still unknown. |
 | `next_steps`     | string[]        | no       | Concrete actions that would move the bug forward. |
 
@@ -27,13 +28,65 @@ required. Optional: `author`, `created_at`, `closed_at`, `labels` (string[]), `a
 
 | Field        | Values |
 |--------------|--------|
-| `headline`   | One sentence that names the bug in plain words, such as "Uploads over 2 GB fail because the size is stored in a 32-bit int". |
-| `tldr`       | Two to four sentences: what breaks, why, and where it stands. |
+| `headline`   | One sentence that names the bug and its cause in plain words, such as "Uploads over 2 GB fail because the size is stored in a 32-bit int". |
+| `tldr`       | Two to four sentences: what breaks, where in the code, and where it stands. |
 | `status`     | `new`, `investigating`, `root_caused`, `fix_in_progress`, `fixed`, `wont_fix`, `duplicate`, `cannot_reproduce` |
 | `severity`   | `critical`, `high`, `medium`, `low` |
-| `confidence` | 0–1. How sure you are of the root cause and status. |
+| `confidence` | 0–1. How sure you are of the origin and status. |
 
-## Nodes
+## Flow
+
+```json
+"flow": {
+  "title": "What happens when you upload a video",
+  "components": [
+    { "id": "app",  "name": "Android app", "detail": "apps/android", "kind": "app" },
+    { "id": "core", "name": "Upload core", "detail": "core/upload",  "kind": "library" }
+  ],
+  "steps": [
+    { "id": "start", "component": "app", "title": "User shares a 2.4 GB video",
+      "location": { "path": "apps/android/src/ShareActivity.kt", "symbol": "onShare", "line": 48,
+                    "url": "https://github.com/o/r/blob/SHA/apps/android/src/ShareActivity.kt#L48" } },
+    { "id": "plan", "component": "core", "title": "Size stored in a 32-bit int", "role": "origin",
+      "location": { "path": "core/upload/chunk_plan.go", "symbol": "ChunkPlan", "line": 14, "url": "…" },
+      "snippet": "type ChunkPlan struct {\n\ttotalSize int32\n}",
+      "detail": "Why this is wrong. `backticks` render as code; blank lines split paragraphs.",
+      "fix": { "label": "PR #151", "url": "https://github.com/o/r/pull/151", "detail": "Use int64." },
+      "refs": [{ "label": "bisect result", "url": "…" }] }
+  ],
+  "edges": [
+    { "from": "start", "to": "plan", "kind": "call", "label": "newChunkPlan(size)" }
+  ]
+}
+```
+
+**Components** are the map's columns, left to right in the order you list them.
+
+| Field    | Notes |
+|----------|-------|
+| `id`     | Unique. |
+| `name`   | As the codebase names it: "gh CLI", "go-gh pkg/api", "Postgres". |
+| `detail` | Optional short label under the name: a repo, package or path. |
+| `kind`   | `app`, `library`, `service`, `storage`, `external`, `process`. Defaults to `app`. |
+
+**Steps** are the map's rows, top to bottom **in execution order**.
+
+| Field       | Notes |
+|-------------|-------|
+| `id`, `component`, `title` | Required. The title says what happens, in plain words. |
+| `role`      | `normal` (default), `origin` (the bug starts here), `propagates` (the bad value or state moves on), `symptom` (the user sees it), `concurrent` (something running at the same time that the bug needs). |
+| `location`  | `{ path, symbol?, line?, url? }`. `url` is a permalink at the commit the bug happened on, with `line` the first line of the snippet. Expected on every `origin`, `propagates` and `symptom` step in code. For a `storage` step, `path` can be the on-disk path or the code that names it. |
+| `snippet`   | 3–12 lines copied exactly from the file. |
+| `detail`    | What happens here and why it matters for the bug. `backticks` render as code and bare URLs become links. A snippet comes from the step's own file; mention call sites in other files here. |
+| `fix`       | `{ label, url?, detail? }` on the step the fix changes. |
+| `alongside` | The id of an earlier step this one runs at the same time as. Both share a row. |
+| `refs`      | `[{label, url}]`: comments, PRs or logs that back the step. |
+
+**Edges** connect steps. If you leave `edges` out, the viewer connects the steps in order.
+`kind` is `call`, `data`, `return`, `error` or `concurrent`. `label` is optional, such as a
+function call, a value or an HTTP status. It shows on hover.
+
+## Investigation nodes
 
 ```json
 {
@@ -48,7 +101,7 @@ required. Optional: `author`, `created_at`, `closed_at`, `labels` (string[]), `a
 }
 ```
 
-`kind` decides the column (lane) the node sits in, left to right:
+The investigation shows up below the map, as a timeline and in the details drawer. `kind` groups the node:
 
 | Lane             | Kinds |
 |------------------|-------|
@@ -100,26 +153,36 @@ Which kind fits:
 
 ```json
 {
-  "format": "bug-trail/v1",
+  "format": "bug-trail/v2",
   "analyzed_at": "2026-11-14T09:00:00Z",
   "analyzed_by": "Claude Code (claude-opus-5-5)",
   "issue": { "url": "https://github.com/o/r/issues/1", "repo": "o/r", "number": 1,
              "title": "Crash on save", "state": "closed" },
-  "summary": { "headline": "Saving a file with an emoji name crashes the app",
-               "tldr": "The filename is truncated by bytes, not characters. Fixed in #2.",
+  "summary": { "headline": "Saving a file with an emoji name crashes because the name is cut by bytes",
+               "tldr": "`fs.ShortName` truncates by bytes and splits a multi-byte character. Fixed in #2.",
                "status": "fixed", "severity": "high", "confidence": 0.9 },
+  "flow": {
+    "title": "What happens when you press Save",
+    "components": [{ "id": "ui", "name": "Editor", "kind": "app" },
+                   { "id": "fs", "name": "fs package", "kind": "library" }],
+    "steps": [
+      { "id": "save", "component": "ui", "title": "User presses Save",
+        "location": { "path": "ui/save.go", "symbol": "onSave" } },
+      { "id": "cut", "component": "fs", "title": "Name cut in the middle of a character", "role": "origin",
+        "location": { "path": "fs/name.go", "symbol": "ShortName", "line": 12,
+                      "url": "https://github.com/o/r/blob/abc123/fs/name.go#L12" },
+        "snippet": "return name[:maxLen]",
+        "fix": { "label": "PR #2", "url": "https://github.com/o/r/pull/2" } },
+      { "id": "crash", "component": "ui", "title": "App crashes with invalid UTF-8", "role": "symptom",
+        "location": { "path": "ui/save.go", "symbol": "onSave", "line": 40 } }
+    ]
+  },
   "nodes": [
     { "id": "r", "kind": "report", "title": "App crashes on save",
       "refs": [{ "label": "issue", "url": "https://github.com/o/r/issues/1" }] },
-    { "id": "rc", "kind": "root_cause", "title": "Name truncated mid-codepoint", "status": "confirmed",
-      "refs": [{ "label": "PR #2", "url": "https://github.com/o/r/pull/2" }] },
-    { "id": "pr", "kind": "pr", "title": "Truncate by grapheme", "status": "done",
+    { "id": "pr", "kind": "pr", "title": "Truncate by character", "status": "done",
       "refs": [{ "label": "PR #2", "url": "https://github.com/o/r/pull/2" }] }
   ],
-  "edges": [
-    { "from": "rc", "to": "r", "relation": "causes" },
-    { "from": "pr", "to": "rc", "relation": "fixes" }
-  ],
-  "story": ["r", "rc", "pr"]
+  "edges": [{ "from": "pr", "to": "r", "relation": "fixes" }]
 }
 ```

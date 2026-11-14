@@ -1,5 +1,5 @@
 {
-  "format": "bug-trail/v1",
+  "format": "bug-trail/v2",
   "analyzed_at": "2026-11-14T12:00:00Z",
   "analyzed_by": "Claude Code (claude-opus-5-5)",
   "issue": {
@@ -11,169 +11,644 @@
     "author": "yrahul3910",
     "created_at": "2026-09-08T15:14:56Z",
     "closed_at": "2026-10-09T11:52:21Z",
-    "labels": ["bug", "priority-3"],
+    "labels": [
+      "bug",
+      "priority-3"
+    ],
     "assignees": []
   },
   "summary": {
-    "headline": "Parallel gh processes corrupt the on-disk API cache, so filtered `gh pr list` fails to parse JSON",
-    "tldr": "`gh pr list --author` failed with `invalid character 'd' after object key` because a cached feature-detection response had been corrupted by two gh processes writing the same cache file. go-gh's cache truncated and rewrote files in place, guarded only by an in-process mutex. go-gh#263 made cache writes atomic (temp file + rename) and shipped in gh 2.101.0; entries already corrupted still need `gh config clear-cache` (self-healing proposed in go-gh#300, still open).",
+    "headline": "Filtered `gh pr list` fails with a JSON error because go-gh's HTTP cache served an entry corrupted by a non-atomic write",
+    "tldr": "With a filter flag, `gh pr list` runs a cached `SearchType_enumValues` feature-detection query. go-gh's `fileStorage.store` (pkg/api/cache.go) rewrote cache files in place, so parallel gh processes could corrupt an entry, and `fileStorage.read` served it unchecked until shurcooL-graphql's JSON decoder failed. go-gh #263 made writes atomic (temp file + rename) and shipped in gh v2.101.0 via cli/cli #14461; entries corrupted before that still need `gh config clear-cache` (go-gh #300 is open).",
     "status": "fixed",
     "severity": "medium",
-    "confidence": 0.85
+    "confidence": 0.8
+  },
+  "flow": {
+    "title": "What happens when you run gh pr list --author \"@me\"",
+    "components": [
+      {
+        "id": "pr",
+        "name": "gh pr list",
+        "detail": "cli/cli pkg/cmd/pr/list, internal/ghcmd",
+        "kind": "app"
+      },
+      {
+        "id": "fd",
+        "name": "featuredetection",
+        "detail": "cli/cli internal/featuredetection",
+        "kind": "library"
+      },
+      {
+        "id": "gogh",
+        "name": "go-gh pkg/api",
+        "detail": "cli/go-gh v2.16.0 cache.go",
+        "kind": "library"
+      },
+      {
+        "id": "gql",
+        "name": "shurcooL-graphql",
+        "detail": "cli/shurcooL-graphql v0.0.4",
+        "kind": "library"
+      },
+      {
+        "id": "disk",
+        "name": "gh cache dir",
+        "detail": "config.CacheDir()",
+        "kind": "storage"
+      },
+      {
+        "id": "other",
+        "name": "Another gh process",
+        "detail": "parallel gh invocation",
+        "kind": "process"
+      }
+    ],
+    "steps": [
+      {
+        "id": "run",
+        "component": "pr",
+        "title": "pr list wraps its HTTP client in a 24-hour cache",
+        "location": {
+          "path": "pkg/cmd/pr/list/list.go",
+          "symbol": "listRun",
+          "line": 156,
+          "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/pkg/cmd/pr/list/list.go#L156-L159"
+        },
+        "snippet": "\tif opts.Detector == nil {\n\t\tcachedClient := api.NewCachedHTTPClient(httpClient, time.Hour*24)\n\t\topts.Detector = fd.NewDetector(cachedClient, baseRepo.RepoHost())\n\t}",
+        "detail": "The reporter ran `gh pr list --author \"@me\"`. `listRun` builds the feature detector on `api.NewCachedHTTPClient(httpClient, time.Hour*24)`, which only adds an `X-GH-CACHE-TTL: 24h0m0s` header to each request (api/http_client.go#L135-L151). The header is visible on the failing request in the reporter's `GH_DEBUG=api` log.",
+        "refs": [
+          {
+            "label": "issue report",
+            "url": "https://github.com/cli/cli/issues/14394"
+          },
+          {
+            "label": "api/http_client.go#L135-L151",
+            "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/api/http_client.go#L135-L151"
+          }
+        ]
+      },
+      {
+        "id": "search",
+        "component": "pr",
+        "title": "Filter flags switch pr list to the search path",
+        "location": {
+          "path": "pkg/cmd/pr/list/http.go",
+          "symbol": "listPullRequests",
+          "line": 13,
+          "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/pkg/cmd/pr/list/http.go#L13-L19"
+        },
+        "snippet": "func shouldUseSearch(filters prShared.FilterOptions) bool {\n\treturn filters.Draft != nil || filters.Author != \"\" || filters.Assignee != \"\" || filters.Search != \"\" || len(filters.Labels) > 0\n}\n\nfunc listPullRequests(httpClient *http.Client, detector fd.Detector, repo ghrepo.Interface, filters prShared.FilterOptions, limit int) (*api.PullRequestAndTotalCount, error) {\n\tif shouldUseSearch(filters) {\n\t\treturn searchPullRequests(httpClient, detector, repo, filters, limit)",
+        "detail": "`--author`, `--search`, `--label`, `--assignee` and `--draft` make `shouldUseSearch` true, so `searchPullRequests` runs and first calls `detector.SearchFeatures()` (http.go#L37-L40). Plain `gh pr list` takes the `NewLister` branch and never touches the cached detector, which is why it kept working.",
+        "refs": [
+          {
+            "label": "http.go#L37-L40",
+            "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/pkg/cmd/pr/list/http.go#L37-L40"
+          }
+        ]
+      },
+      {
+        "id": "detect",
+        "component": "fd",
+        "title": "Detector asks the API for the SearchType enum values",
+        "location": {
+          "path": "internal/featuredetection/feature_detection.go",
+          "symbol": "detector.SearchFeatures",
+          "line": 459,
+          "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/internal/featuredetection/feature_detection.go#L459-L470"
+        },
+        "snippet": "\tvar searchTypeFeatureDetection struct {\n\t\tSearchType struct {\n\t\t\tEnumValues []struct {\n\t\t\t\tName string\n\t\t\t} `graphql:\"enumValues(includeDeprecated: true)\"`\n\t\t} `graphql:\"SearchType: __type(name: \\\"SearchType\\\")\"`\n\t}\n\n\tgql := api.NewClientFromHTTP(d.httpClient)\n\tif err := gql.Query(d.host, \"SearchType_enumValues\", &searchTypeFeatureDetection, nil); err != nil {\n\t\treturn SearchFeatures{}, err\n\t}",
+        "detail": "`SearchFeatures` sends the `SearchType_enumValues` introspection query through the cached client via `api.Client.Query` (api/client.go#L134-L142), which hands off to go-gh's GraphQL client. Because it is a POST to `/graphql`, go-gh treats it as cacheable.",
+        "refs": [
+          {
+            "label": "triage analysis",
+            "url": "https://github.com/cli/cli/issues/14394#issuecomment-5587629827"
+          },
+          {
+            "label": "api/client.go#L134-L142",
+            "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/api/client.go#L134-L142"
+          }
+        ]
+      },
+      {
+        "id": "miss",
+        "component": "gogh",
+        "title": "On a cache miss the response is fetched, then stored",
+        "location": {
+          "path": "pkg/api/cache.go",
+          "symbol": "cacheRoundTripper.RoundTrip",
+          "line": 104,
+          "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L104-L115"
+        },
+        "snippet": "\tkey, keyErr := cacheKey(req)\n\tif keyErr == nil {\n\t\tif res, err := crt.fs.read(key); err == nil {\n\t\t\tres.Request = req\n\t\t\treturn res, nil\n\t\t}\n\t}\n\n\tres, err := crt.rt.RoundTrip(req)\n\tif err == nil && keyErr == nil && isCacheableResponse(res) {\n\t\t_ = crt.fs.store(key, res)\n\t}",
+        "detail": "`RoundTrip` hashes method, URL, Accept, Authorization and body into a key (`cacheKey`, L55-L73). If no fresh file exists it calls the network and then `crt.fs.store(key, res)`, ignoring any store error. Any gh process that runs the same query against the same host with the same token computes the same key and the same file path.",
+        "refs": [
+          {
+            "label": "L55-L73",
+            "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L55-L73"
+          }
+        ]
+      },
+      {
+        "id": "store",
+        "component": "gogh",
+        "title": "Cache entry rewritten in place with no temp file",
+        "role": "origin",
+        "location": {
+          "path": "pkg/api/cache.go",
+          "symbol": "fileStorage.store",
+          "line": 176,
+          "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L176-L187"
+        },
+        "snippet": "\tfs.mu.Lock()\n\tdefer fs.mu.Unlock()\n\n\tif storeErr = os.MkdirAll(filepath.Dir(cacheFile), 0755); storeErr != nil {\n\t\treturn\n\t}\n\n\tvar f *os.File\n\tif f, storeErr = os.OpenFile(cacheFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600); storeErr != nil {\n\t\treturn\n\t}\n",
+        "detail": "`store` opens the final cache file with `O_TRUNC` and serialises the response straight into it with `res.Write(f)`. The only guard is `fs.mu`, a `sync.RWMutex` created per round tripper (L75-L81), so it serialises writers inside one process but not across gh processes. Two processes writing the same entry, or a process killed mid-write, can leave a file that is neither response.\n\nThe go-gh issue (#252) describes exactly this; the maintainer linked this report to it. That this reporter's file was corrupted by a concurrent write rather than an interrupted one is likely, not shown: the reporter did not say whether gh was running in parallel.",
+        "fix": {
+          "label": "go-gh PR #263",
+          "url": "https://github.com/cli/go-gh/pull/263",
+          "detail": "Write to `os.CreateTemp(dir, \".gh-cache-*\")`, close it, then rename it over the entry (`renameCacheFile`), so readers only ever see a complete file. Released in go-gh v2.16.1."
+        },
+        "refs": [
+          {
+            "label": "go-gh #252: API cache is not write-atomic",
+            "url": "https://github.com/cli/go-gh/issues/252"
+          },
+          {
+            "label": "maintainer links #252",
+            "url": "https://github.com/cli/cli/issues/14394#issuecomment-5595893491"
+          },
+          {
+            "label": "L75-L81",
+            "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L75-L81"
+          }
+        ]
+      },
+      {
+        "id": "other",
+        "component": "other",
+        "title": "Another gh process writes the same entry at the same time",
+        "role": "concurrent",
+        "alongside": "store",
+        "location": {
+          "path": "pkg/api/cache.go",
+          "symbol": "fileStorage.store",
+          "line": 194,
+          "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L194-L205"
+        },
+        "snippet": "\tvar origBody io.ReadCloser\n\tif res.Body != nil {\n\t\torigBody, res.Body = copyStream(res.Body)\n\t\tdefer res.Body.Close()\n\t}\n\n\tstoreErr = res.Write(f)\n\tif origBody != nil {\n\t\tres.Body = origBody\n\t}\n\n\treturn",
+        "detail": "A second gh invocation (for example several agents or scripts running gh in parallel) misses the cache for the same key and runs the same `store` code against the same path. Its in-process mutex does not exclude the first process, so both `res.Write(f)` calls write into one file. Likely, per go-gh #252 and the maintainer's comment that gh is now often run as many parallel instances.",
+        "refs": [
+          {
+            "label": "maintainer comment on parallel gh",
+            "url": "https://github.com/cli/cli/issues/14394#issuecomment-5595893491"
+          }
+        ]
+      },
+      {
+        "id": "file",
+        "component": "disk",
+        "title": "Cache file holds a corrupted JSON body",
+        "role": "propagates",
+        "location": {
+          "path": "pkg/api/cache.go",
+          "symbol": "fileStorage.filePath",
+          "line": 134,
+          "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L134-L139"
+        },
+        "snippet": "func (fs *fileStorage) filePath(key string) string {\n\tif len(key) >= 6 {\n\t\treturn filepath.Join(fs.dir, key[0:2], key[2:4], key[4:])\n\t}\n\treturn filepath.Join(fs.dir, key)\n}",
+        "detail": "The entry lives under gh's cache dir (`config.CacheDir()`, set in go-gh `NewHTTPClient`, http_client.go#L79-L86) at `<key[0:2]>/<key[2:4]>/<rest>`. In the reporter's log the stored body starts `{\"{\"data\":{\"SearchType\"...`: HTTP framing still parses, but the JSON has an extra `{\"` in front. The entry stays valid for 24 hours from its mtime.",
+        "refs": [
+          {
+            "label": "debug log in issue",
+            "url": "https://github.com/cli/cli/issues/14394"
+          },
+          {
+            "label": "comment on corrupt entries",
+            "url": "https://github.com/cli/cli/issues/14394#issuecomment-5674221994"
+          },
+          {
+            "label": "http_client.go#L79-L86",
+            "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/http_client.go#L79-L86"
+          }
+        ]
+      },
+      {
+        "id": "read",
+        "component": "gogh",
+        "title": "Later run serves the corrupt entry without checking it",
+        "role": "propagates",
+        "location": {
+          "path": "pkg/api/cache.go",
+          "symbol": "fileStorage.read",
+          "line": 163,
+          "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L163-L170"
+        },
+        "snippet": "\tbody := &bytes.Buffer{}\n\t_, err = io.Copy(body, f)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tres, err := http.ReadResponse(bufio.NewReader(body), nil)\n\treturn res, err",
+        "detail": "On the reporter's run `RoundTrip` finds the file, `read` checks only its age against the TTL and parses it with `http.ReadResponse`, and `RoundTrip` returns it as the response (L106-L108). Nothing checks the body. The log confirms a cache hit: `Request took 463.708µs`, and the response `Date` (01:18:38 GMT) is about 14 hours older than the request (15:06 GMT).",
+        "refs": [
+          {
+            "label": "debug log in issue",
+            "url": "https://github.com/cli/cli/issues/14394"
+          },
+          {
+            "label": "L106-L108",
+            "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/cache.go#L106-L108"
+          }
+        ]
+      },
+      {
+        "id": "decode",
+        "component": "gql",
+        "title": "JSON decoder rejects the cached body",
+        "role": "propagates",
+        "location": {
+          "path": "graphql.go",
+          "symbol": "Client.do",
+          "line": 92,
+          "url": "https://github.com/cli/shurcooL-graphql/blob/73d4805146e2bac896e7a900d35dec336b8af31f/graphql.go#L92-L101"
+        },
+        "snippet": "\tvar out struct {\n\t\tData   *json.RawMessage\n\t\tErrors Errors\n\t\t//Extensions any // Unused.\n\t}\n\terr = json.NewDecoder(resp.Body).Decode(&out)\n\tif err != nil {\n\t\t// TODO: Consider including response body in returned error, if deemed helpful.\n\t\treturn err\n\t}",
+        "detail": "go-gh's `GraphQLClient.QueryWithContext` calls `c.client.QueryNamed` (graphql_client.go#L152-L169), which lands in shurcooL-graphql `do` (v0.0.4, the version go-gh v2.16.0 requires). The decoder reads `{`, then the string `\"{\"` as an object key, then finds `d` where it expects `:`, and returns `invalid character 'd' after object key` unwrapped. go-gh only rewraps `graphql.Errors`, so this error passes through as is.",
+        "refs": [
+          {
+            "label": "graphql_client.go#L152-L169",
+            "url": "https://github.com/cli/go-gh/blob/c9808f266122bea7f5d7500d771c8134a0217af7/pkg/api/graphql_client.go#L152-L169"
+          }
+        ]
+      },
+      {
+        "id": "bubble",
+        "component": "fd",
+        "title": "Feature detection returns the decode error unchanged",
+        "role": "propagates",
+        "location": {
+          "path": "internal/featuredetection/feature_detection.go",
+          "symbol": "detector.SearchFeatures",
+          "line": 467,
+          "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/internal/featuredetection/feature_detection.go#L467-L470"
+        },
+        "snippet": "\tgql := api.NewClientFromHTTP(d.httpClient)\n\tif err := gql.Query(d.host, \"SearchType_enumValues\", &searchTypeFeatureDetection, nil); err != nil {\n\t\treturn SearchFeatures{}, err\n\t}",
+        "detail": "`api.handleResponse` only converts go-gh `HTTPError` and `GraphQLError` values, so it falls through to `return err` (api/client.go#L318-L342). `SearchFeatures` returns it, `searchPullRequests` returns it (http.go#L37-L40), and `listRun` returns it (list.go#L199-L202). No context is added on the way up.",
+        "refs": [
+          {
+            "label": "api/client.go#L318-L342",
+            "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/api/client.go#L318-L342"
+          },
+          {
+            "label": "http.go#L37-L40",
+            "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/pkg/cmd/pr/list/http.go#L37-L40"
+          },
+          {
+            "label": "list.go#L199-L202",
+            "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/pkg/cmd/pr/list/list.go#L199-L202"
+          }
+        ]
+      },
+      {
+        "id": "print",
+        "component": "pr",
+        "title": "gh prints the bare JSON error and exits",
+        "role": "symptom",
+        "location": {
+          "path": "internal/ghcmd/cmd.go",
+          "symbol": "printError",
+          "line": 287,
+          "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/internal/ghcmd/cmd.go#L287-L298"
+        },
+        "snippet": "func printError(out io.Writer, cs *iostreams.ColorScheme, err error, cmd *cobra.Command, debug, fullHelp bool) {\n\tvar dnsError *net.DNSError\n\tif errors.As(err, &dnsError) {\n\t\tfmt.Fprintf(out, \"error connecting to %s\\n\", dnsError.Name)\n\t\tif debug {\n\t\t\tfmt.Fprintln(out, dnsError)\n\t\t}\n\t\tfmt.Fprintln(out, \"check your internet connection or https://githubstatus.com\")\n\t\treturn\n\t}\n\n\tfmt.Fprintln(out, err)",
+        "detail": "`Main` gets the error from `rootCmd.ExecuteContextC` and calls `printError` (cmd.go#L195-L226), which prints it with `fmt.Fprintln(out, err)`. The user sees only `invalid character 'd' after object key`, with no hint that a cache entry is at fault. Every filtered `gh pr list` fails the same way until the entry expires or `gh config clear-cache` removes it.",
+        "refs": [
+          {
+            "label": "issue report",
+            "url": "https://github.com/cli/cli/issues/14394"
+          },
+          {
+            "label": "clear-cache worked",
+            "url": "https://github.com/cli/cli/issues/14394#issuecomment-5591789788"
+          },
+          {
+            "label": "cmd.go#L195-L226",
+            "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/internal/ghcmd/cmd.go#L195-L226"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "from": "run",
+        "to": "search",
+        "kind": "call",
+        "label": "listPullRequests(...)"
+      },
+      {
+        "from": "search",
+        "to": "detect",
+        "kind": "call",
+        "label": "detector.SearchFeatures()"
+      },
+      {
+        "from": "detect",
+        "to": "miss",
+        "kind": "call",
+        "label": "gql.Query(d.host, \"SearchType_enumValues\", ...)"
+      },
+      {
+        "from": "miss",
+        "to": "store",
+        "kind": "call",
+        "label": "crt.fs.store(key, res)"
+      },
+      {
+        "from": "other",
+        "to": "store",
+        "kind": "concurrent",
+        "label": "same cache key, same file"
+      },
+      {
+        "from": "store",
+        "to": "file",
+        "kind": "data",
+        "label": "interleaved res.Write(f)"
+      },
+      {
+        "from": "file",
+        "to": "read",
+        "kind": "data",
+        "label": "next run within 24h"
+      },
+      {
+        "from": "read",
+        "to": "decode",
+        "kind": "return",
+        "label": "cached *http.Response"
+      },
+      {
+        "from": "decode",
+        "to": "bubble",
+        "kind": "error",
+        "label": "invalid character 'd' after object key"
+      },
+      {
+        "from": "bubble",
+        "to": "print",
+        "kind": "error",
+        "label": "returned by listRun"
+      }
+    ]
   },
   "nodes": [
     {
-      "id": "report", "kind": "report",
-      "title": "Filtered `gh pr list` fails with a JSON parse error",
-      "detail": "`gh pr list --author \"@me\"` and `--search ...` print `invalid character 'd' after object key`; plain `gh pr list` works.",
-      "at": "2026-09-08T15:14:56Z", "actor": "yrahul3910", "status": "confirmed",
-      "refs": [{ "label": "issue", "url": "https://github.com/cli/cli/issues/14394" }]
-    },
-    {
-      "id": "env", "kind": "environment",
-      "title": "gh 2.100.0 on a repo the reporter says is GitHub Enterprise",
-      "detail": "Reporter ran gh 2.100.0 (2026-09-03). They said the repo is on GitHub Enterprise, though the debug log shows requests to api.github.com.",
-      "at": "2026-09-08T15:14:56Z", "actor": "yrahul3910", "status": "confirmed",
-      "refs": [{ "label": "issue", "url": "https://github.com/cli/cli/issues/14394" }]
-    },
-    {
-      "id": "sym_log", "kind": "symptom",
-      "title": "Debug log shows a cached body starting with `{\"{\"data\"`",
-      "detail": "With `GH_DEBUG=api`, the second request (`SearchType_enumValues` introspection, `X-Gh-Cache-Ttl: 24h`) returns in ~460µs with an old `Date` header and a body with a duplicated prefix: `{\"{\"data\":{\"SearchType\":...`.",
-      "at": "2026-09-08T15:14:56Z", "actor": "yrahul3910", "status": "confirmed",
-      "refs": [{ "label": "issue debug log", "url": "https://github.com/cli/cli/issues/14394" }]
-    },
-    {
-      "id": "h_flags", "kind": "hypothesis",
-      "title": "Filter flags make `gh pr list` build or parse bad JSON",
-      "detail": "The reporter's framing: the flags themselves break JSON parsing in `gh pr list`.",
-      "at": "2026-09-08T15:14:56Z", "actor": "yrahul3910", "status": "rejected",
-      "refs": [{ "label": "issue", "url": "https://github.com/cli/cli/issues/14394" }]
-    },
-    {
-      "id": "ev_triage", "kind": "evidence",
-      "title": "Triage: failure is in the cached feature-detection call",
-      "detail": "Filter flags trigger GHES advanced-search feature detection, which is memoized in the on-disk HTTP cache (24h TTL). The live response before it is valid JSON; the cached one is not. Points at cache corruption from concurrent or interrupted writes, but could not confirm the mechanism.",
-      "at": "2026-09-08T15:27:32Z", "actor": "cli-triage", "status": "confirmed",
-      "refs": [
-        { "label": "triage comment", "url": "https://github.com/cli/cli/issues/14394#issuecomment-5587629827" },
-        { "label": "feature_detection.go", "url": "https://github.com/cli/cli/blob/1d0cb0c158f66128c04562c67ba6ad4236eb8835/internal/featuredetection/feature_detection.go#L459-L470" }
-      ]
-    },
-    {
-      "id": "ev_clear", "kind": "evidence",
-      "title": "`gh config clear-cache` makes the error go away",
-      "detail": "Maintainer asked the reporter to clear the cache; the command then worked.",
-      "at": "2026-09-08T20:59:45Z", "actor": "yrahul3910", "status": "confirmed",
-      "refs": [
-        { "label": "maintainer request", "url": "https://github.com/cli/cli/issues/14394#issuecomment-5587725313" },
-        { "label": "reporter result", "url": "https://github.com/cli/cli/issues/14394#issuecomment-5591789788" }
-      ]
-    },
-    {
-      "id": "h_oneoff", "kind": "hypothesis",
-      "title": "It was a one-off glitch; close the issue",
-      "detail": "After clearing the cache fixed it, the reporter closed the issue as a one-off. The maintainer reopened it the next day, linking it to a known go-gh bug.",
-      "at": "2026-09-08T20:59:45Z", "actor": "yrahul3910", "status": "rejected",
-      "refs": [{ "label": "reporter comment", "url": "https://github.com/cli/cli/issues/14394#issuecomment-5591789788" }]
-    },
-    {
-      "id": "ev_252", "kind": "evidence",
-      "title": "go-gh#252 reports the same error from a corrupted cache entry",
-      "detail": "Another user hit `invalid character 'd' after object key` on `gh pr merge`, with a cached `PullRequest_fields` body containing an interleaved prefix `{\"data\":{\"PullReque{\"data\":...`.",
-      "at": "2026-08-07T09:56:24Z", "actor": "hyrious", "status": "confirmed",
-      "refs": [{ "label": "go-gh#252 comment", "url": "https://github.com/cli/go-gh/issues/252#issuecomment-5215561407" }]
-    },
-    {
-      "id": "h_cache", "kind": "hypothesis",
-      "title": "Concurrent gh processes corrupt the HTTP cache file",
-      "detail": "Maintainer: \"It's probably cli/go-gh#252\" and notes gh is now often run in parallel (e.g. by agents).",
-      "at": "2026-09-09T04:39:58Z", "actor": "williammartin", "status": "confirmed",
-      "refs": [{ "label": "maintainer comment", "url": "https://github.com/cli/cli/issues/14394#issuecomment-5595893491" }]
-    },
-    {
-      "id": "rc", "kind": "root_cause",
-      "title": "Cache writes truncate the file in place with only an in-process lock",
-      "detail": "go-gh's cache `store` truncated the existing file and wrote the new body. Its mutex only serializes writers inside one process, so two `gh` processes could interleave writes to the same entry (or a crash could leave a partial file). The corrupted entry kept valid HTTP framing, so it was served for up to 24h.",
+      "id": "r",
+      "kind": "report",
+      "title": "gh pr list with filter flags fails: invalid character 'd' after object key",
+      "detail": "`gh pr list --author \"@me\"` and `--search ...` fail; plain `gh pr list` works.",
       "status": "confirmed",
+      "at": "2026-09-08T15:14:56Z",
+      "actor": "yrahul3910",
       "refs": [
-        { "label": "go-gh#252", "url": "https://github.com/cli/go-gh/issues/252" },
-        { "label": "go-gh#263 description", "url": "https://github.com/cli/go-gh/pull/263" }
+        {
+          "label": "issue",
+          "url": "https://github.com/cli/cli/issues/14394"
+        }
       ]
     },
     {
-      "id": "code", "kind": "code",
-      "title": "go-gh `pkg/api/cache.go`, `store` method",
-      "refs": [{ "label": "cache.go store", "url": "https://github.com/cli/go-gh/blob/a89b68a441b259f483266e4cee718d9a8e606722/pkg/api/cache.go#L173" }]
-    },
-    {
-      "id": "wa", "kind": "workaround",
-      "title": "Run `gh config clear-cache`",
-      "detail": "Removes corrupted entries. Still the only cure for entries corrupted before the fix.",
-      "at": "2026-09-08T15:34:17Z", "actor": "williammartin", "status": "confirmed",
-      "refs": [{ "label": "maintainer comment", "url": "https://github.com/cli/cli/issues/14394#issuecomment-5587725313" }]
-    },
-    {
-      "id": "pr263", "kind": "pr",
-      "title": "go-gh#263: write cache entries to a temp file, then rename",
-      "detail": "Makes cache publication atomic; failed writes leave the old entry untouched; retries Windows sharing conflicts. Fixes go-gh#252. Approved by niik.",
-      "at": "2026-09-11T15:50:18Z", "actor": "baiyuxi930826", "status": "done",
-      "refs": [{ "label": "go-gh PR #263", "url": "https://github.com/cli/go-gh/pull/263" }]
-    },
-    {
-      "id": "pr14461", "kind": "pr",
-      "title": "cli#14461 bumps go-gh to v2.16.1, which includes #263",
-      "at": "2026-09-15T13:30:23Z", "actor": "niik", "status": "done",
+      "id": "env",
+      "kind": "environment",
+      "title": "gh 2.100.0, GitHub Enterprise repo, requests to api.github.com",
+      "detail": "gh 2.100.0 pins go-gh v2.16.0 (go.mod).",
+      "status": "confirmed",
+      "at": "2026-09-08T15:14:56Z",
+      "actor": "yrahul3910",
       "refs": [
-        { "label": "cli PR #14461", "url": "https://github.com/cli/cli/pull/14461" },
-        { "label": "go-gh v2.16.1 release", "url": "https://github.com/cli/go-gh/releases/tag/v2.16.1" }
+        {
+          "label": "issue",
+          "url": "https://github.com/cli/cli/issues/14394"
+        },
+        {
+          "label": "go.mod",
+          "url": "https://github.com/cli/cli/blob/45437bc7eeeb3359bbfddd1742f79de7652fd3e2/go.mod"
+        }
       ]
     },
     {
-      "id": "ver_release", "kind": "verification",
-      "title": "Fix shipped in gh v2.101.0; issue closed as completed",
-      "detail": "The v2.101.0 release notes list the go-gh bump. Nobody on the thread reported re-testing; the maintainer closed the issue on 2026-10-09.",
-      "at": "2026-09-15T14:24:34Z", "status": "done",
-      "refs": [{ "label": "gh v2.101.0", "url": "https://github.com/cli/cli/releases/tag/v2.101.0" }]
+      "id": "sym",
+      "kind": "symptom",
+      "title": "Cached SearchType_enumValues body starts with {\"{\"data\"",
+      "detail": "The GH_DEBUG=api log shows the failing response came back in 463µs with a Date header hours older than the request, and httpretty reports `body cannot be formatted: invalid character 'd' after object key`.",
+      "status": "confirmed",
+      "at": "2026-09-08T15:14:56Z",
+      "actor": "yrahul3910",
+      "refs": [
+        {
+          "label": "debug log",
+          "url": "https://github.com/cli/cli/issues/14394"
+        }
+      ]
     },
     {
-      "id": "q_old", "kind": "question",
-      "title": "Entries corrupted before the fix are still served",
-      "detail": "Pointed out by LucasLeao18; go-gh#300 proposes a SHA-256 sidecar that evicts bad entries. Still open and unreviewed at analysis time.",
-      "at": "2026-09-15T03:26:56Z", "actor": "LucasLeao18", "status": "open",
+      "id": "ev_triage",
+      "kind": "evidence",
+      "title": "Triage bot traces the failure to cached feature detection",
+      "detail": "Points at the `SearchType_enumValues` query in featuredetection and the on-disk response cache; mechanism left open.",
+      "status": "confirmed",
+      "at": "2026-09-08T15:27:32Z",
+      "actor": "cli-triage[bot]",
       "refs": [
-        { "label": "comment", "url": "https://github.com/cli/cli/issues/14394#issuecomment-5674221994" },
-        { "label": "go-gh PR #300", "url": "https://github.com/cli/go-gh/pull/300" }
+        {
+          "label": "comment",
+          "url": "https://github.com/cli/cli/issues/14394#issuecomment-5587629827"
+        }
+      ]
+    },
+    {
+      "id": "ev_clear",
+      "kind": "evidence",
+      "title": "gh config clear-cache makes the command work again",
+      "status": "confirmed",
+      "at": "2026-09-08T20:59:45Z",
+      "actor": "yrahul3910",
+      "refs": [
+        {
+          "label": "suggestion",
+          "url": "https://github.com/cli/cli/issues/14394#issuecomment-5587725313"
+        },
+        {
+          "label": "result",
+          "url": "https://github.com/cli/cli/issues/14394#issuecomment-5591789788"
+        }
+      ]
+    },
+    {
+      "id": "h_oneoff",
+      "kind": "hypothesis",
+      "title": "A one-off glitch, nothing to fix",
+      "detail": "The reporter closed the issue after clearing the cache.",
+      "status": "rejected",
+      "at": "2026-09-08T20:59:45Z",
+      "actor": "yrahul3910",
+      "refs": [
+        {
+          "label": "comment",
+          "url": "https://github.com/cli/cli/issues/14394#issuecomment-5591789788"
+        }
+      ]
+    },
+    {
+      "id": "rc",
+      "kind": "root_cause",
+      "title": "go-gh cache writes are not atomic across processes",
+      "detail": "`fileStorage.store` truncates and rewrites the live cache file; its mutex is per process. Already reported as go-gh #252; the maintainer reopened this issue and linked it.",
+      "status": "likely",
+      "at": "2026-09-09T04:39:58Z",
+      "actor": "williammartin",
+      "refs": [
+        {
+          "label": "maintainer comment",
+          "url": "https://github.com/cli/cli/issues/14394#issuecomment-5595893491"
+        },
+        {
+          "label": "go-gh #252",
+          "url": "https://github.com/cli/go-gh/issues/252"
+        }
+      ]
+    },
+    {
+      "id": "pr263",
+      "kind": "pr",
+      "title": "go-gh #263: publish HTTP cache entries without in-place writes",
+      "status": "done",
+      "at": "2026-09-11T15:50:18Z",
+      "actor": "baiyuxi930826",
+      "refs": [
+        {
+          "label": "PR #263",
+          "url": "https://github.com/cli/go-gh/pull/263"
+        }
+      ]
+    },
+    {
+      "id": "pr14461",
+      "kind": "pr",
+      "title": "cli/cli #14461: bump go-gh to v2.16.1",
+      "status": "done",
+      "at": "2026-09-15T13:30:23Z",
+      "actor": "niik",
+      "refs": [
+        {
+          "label": "PR #14461",
+          "url": "https://github.com/cli/cli/pull/14461"
+        }
+      ]
+    },
+    {
+      "id": "rel",
+      "kind": "verification",
+      "title": "Shipped in gh v2.101.0",
+      "status": "done",
+      "at": "2026-09-15T14:24:34Z",
+      "refs": [
+        {
+          "label": "v2.101.0 release",
+          "url": "https://github.com/cli/cli/releases/tag/v2.101.0"
+        }
+      ]
+    },
+    {
+      "id": "pr300",
+      "kind": "pr",
+      "title": "go-gh #300: evict cache entries that fail an integrity check",
+      "detail": "Follow-up so entries corrupted before #263 heal themselves instead of needing clear-cache.",
+      "status": "open",
+      "at": "2026-09-15T03:26:56Z",
+      "actor": "LucasLeao18",
+      "refs": [
+        {
+          "label": "PR #300",
+          "url": "https://github.com/cli/go-gh/pull/300"
+        },
+        {
+          "label": "comment",
+          "url": "https://github.com/cli/cli/issues/14394#issuecomment-5674221994"
+        }
       ]
     }
   ],
   "edges": [
-    { "from": "report", "to": "sym_log", "relation": "leads_to" },
-    { "from": "env", "to": "report", "relation": "relates" },
-    { "from": "report", "to": "h_flags", "relation": "leads_to" },
-    { "from": "ev_triage", "to": "h_flags", "relation": "refutes", "note": "Live request is valid; only the cached feature-detection body is malformed" },
-    { "from": "sym_log", "to": "ev_triage", "relation": "leads_to" },
-    { "from": "ev_triage", "to": "ev_clear", "relation": "leads_to" },
-    { "from": "ev_clear", "to": "h_oneoff", "relation": "leads_to" },
-    { "from": "ev_252", "to": "h_oneoff", "relation": "refutes", "note": "Same corruption seen independently on another command" },
-    { "from": "ev_252", "to": "h_cache", "relation": "supports" },
-    { "from": "ev_clear", "to": "h_cache", "relation": "supports" },
-    { "from": "h_cache", "to": "rc", "relation": "leads_to" },
-    { "from": "code", "to": "rc", "relation": "causes" },
-    { "from": "rc", "to": "sym_log", "relation": "causes" },
-    { "from": "wa", "to": "report", "relation": "mitigates" },
-    { "from": "pr263", "to": "rc", "relation": "fixes" },
-    { "from": "pr14461", "to": "pr263", "relation": "implements", "note": "Pulls the go-gh fix into gh" },
-    { "from": "ver_release", "to": "pr14461", "relation": "verifies" },
-    { "from": "q_old", "to": "pr263", "relation": "relates", "note": "Atomic writes do not heal entries already corrupted" }
+    {
+      "from": "r",
+      "to": "ev_triage",
+      "relation": "leads_to"
+    },
+    {
+      "from": "env",
+      "to": "r",
+      "relation": "relates"
+    },
+    {
+      "from": "r",
+      "to": "sym",
+      "relation": "leads_to"
+    },
+    {
+      "from": "sym",
+      "to": "ev_triage",
+      "relation": "supports"
+    },
+    {
+      "from": "ev_clear",
+      "to": "rc",
+      "relation": "supports",
+      "note": "Removing cache files removes the failure"
+    },
+    {
+      "from": "ev_clear",
+      "to": "h_oneoff",
+      "relation": "leads_to"
+    },
+    {
+      "from": "rc",
+      "to": "h_oneoff",
+      "relation": "refutes",
+      "note": "Maintainer reopened: a known go-gh cache race"
+    },
+    {
+      "from": "rc",
+      "to": "sym",
+      "relation": "causes"
+    },
+    {
+      "from": "pr263",
+      "to": "rc",
+      "relation": "fixes"
+    },
+    {
+      "from": "pr263",
+      "to": "pr14461",
+      "relation": "leads_to"
+    },
+    {
+      "from": "rel",
+      "to": "pr263",
+      "relation": "verifies"
+    },
+    {
+      "from": "pr14461",
+      "to": "rel",
+      "relation": "leads_to"
+    },
+    {
+      "from": "pr300",
+      "to": "sym",
+      "relation": "mitigates",
+      "note": "Would self-heal entries corrupted before the fix"
+    }
   ],
-  "story": ["report", "sym_log", "h_flags", "ev_triage", "ev_clear", "h_oneoff", "ev_252", "h_cache", "rc", "pr263", "pr14461", "ver_release"],
   "open_questions": [
-    "Will go-gh#300 (integrity check and eviction) be merged so already-corrupted entries self-heal?",
-    "The reporter never confirmed the fix on 2.101.0 or later."
+    "Whether the reporter's entry was corrupted by two parallel gh processes or by a gh process that died mid-write; the exact byte sequence that produced the leading {\" was not reconstructed.",
+    "Whether users on gh v2.101.0+ still hit this from entries corrupted before upgrading (go-gh #300 is still open)."
   ],
   "next_steps": [
-    "Review go-gh#300 and bump go-gh in cli/cli once it lands.",
-    "Until then, document `gh config clear-cache` for users on pre-2.101.0 caches."
+    "Review and merge go-gh #300 so corrupt entries are evicted and refetched, then bump go-gh in cli/cli.",
+    "Until then, tell affected users to run `gh config clear-cache`."
   ]
 }

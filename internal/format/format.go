@@ -1,4 +1,4 @@
-// Package format defines the bug-trail/v1 file format and its validator.
+// Package format defines the bug-trail file format (v2, reading v1 too) and its validator.
 // It is the single source of truth: the dashboard's browser code receives
 // these definitions from BrowserModule.
 package format
@@ -13,7 +13,22 @@ import (
 	"time"
 )
 
-const Format = "bug-trail/v1"
+// Format is the current version. v2 adds "flow": the code path the bug takes
+// through the application. v1 files (no flow) still load, with a warning.
+const (
+	Format   = "bug-trail/v2"
+	FormatV1 = "bug-trail/v1"
+)
+
+// Flow vocabulary.
+var (
+	// StepRoles say what a step has to do with the bug.
+	StepRoles = []string{"normal", "origin", "propagates", "symptom", "concurrent"}
+	// BugRoles are the roles on the bug's path, origin to symptom.
+	BugRoles       = []string{"origin", "propagates", "symptom"}
+	ComponentKinds = []string{"app", "library", "service", "storage", "external", "process"}
+	FlowEdgeKinds  = []string{"call", "data", "return", "error", "concurrent"}
+)
 
 type Lane struct {
 	ID    string `json:"id"`
@@ -132,7 +147,8 @@ func Validate(v any) Result {
 		errf("Top level must be a JSON object")
 		return r
 	}
-	if t["format"] != Format {
+	isV2 := t["format"] == Format
+	if !isV2 && t["format"] != FormatV1 {
 		errf("format must be %q", Format)
 	}
 	if !isDate(t["analyzed_at"]) {
@@ -195,9 +211,13 @@ func Validate(v any) Result {
 
 	ids := map[string]bool{}
 	var nodeIDs []string
+	// nodes/edges hold the investigation (hypotheses, evidence, PRs). Required in v1,
+	// optional in v2 where the flow is the main picture.
 	nodes, nodesOK := t["nodes"].([]any)
-	if !nodesOK || len(nodes) == 0 {
+	if !isV2 && (!nodesOK || len(nodes) == 0) {
 		errf("nodes must be a non-empty array")
+	} else if t["nodes"] != nil && !nodesOK {
+		errf("nodes must be an array")
 	} else {
 		for k, nv := range nodes {
 			at := fmt.Sprintf("nodes[%d]", k)
@@ -248,7 +268,9 @@ func Validate(v any) Result {
 
 	linked := map[string]bool{}
 	if edges, ok := t["edges"].([]any); !ok {
-		errf("edges must be an array")
+		if !isV2 || t["edges"] != nil {
+			errf("edges must be an array")
+		}
 	} else {
 		for k, ev := range edges {
 			at := fmt.Sprintf("edges[%d]", k)
@@ -283,7 +305,9 @@ func Validate(v any) Result {
 			}
 		}
 	} else {
-		warnf("story is missing; the viewer cannot step through the main storyline")
+		if !isV2 {
+			warnf("story is missing; the viewer cannot step through the main storyline")
+		}
 	}
 
 	if len(nodes) > 1 {
@@ -293,7 +317,7 @@ func Validate(v any) Result {
 			}
 		}
 	}
-	if hasSummary && oneOf(s["status"], []string{"root_caused", "fix_in_progress", "fixed"}) {
+	if hasSummary && !isV2 && oneOf(s["status"], []string{"root_caused", "fix_in_progress", "fixed"}) {
 		hasRC := slices.ContainsFunc(nodes, func(nv any) bool {
 			n, _ := nv.(map[string]any)
 			return n != nil && n["kind"] == "root_cause"
@@ -318,7 +342,181 @@ func Validate(v any) Result {
 			errf("%s must be an array of strings", key)
 		}
 	}
+	if isV2 {
+		validateFlow(t["flow"], errf, warnf)
+	} else {
+		warnf("this is a v1 trail with no code flow; run the bug-trail skill again to map the code path")
+	}
 	return r
+}
+
+func validateRefs(at string, v any, errf func(string, ...any)) int {
+	if v == nil {
+		return 0
+	}
+	refs, ok := v.([]any)
+	if !ok {
+		errf("%s.refs must be an array", at)
+		return 0
+	}
+	for j, rv := range refs {
+		ref, ok := rv.(map[string]any)
+		if !ok || !isStr(ref["label"]) || !isURL(ref["url"]) {
+			errf("%s.refs[%d] needs a label and an http(s) url", at, j)
+		}
+	}
+	return len(refs)
+}
+
+// validateFlow checks the code path: components (columns) and steps (rows, in
+// execution order) with the role each step plays in the bug.
+func validateFlow(v any, errf, warnf func(string, ...any)) {
+	f, ok := v.(map[string]any)
+	if !ok {
+		errf("flow is required: the components and steps of the code path the bug takes")
+		return
+	}
+	if !isStr(f["title"]) {
+		warnf("flow.title is missing (for example: what happens when you run the failing command)")
+	}
+
+	compKind := map[string]string{}
+	comps, ok := f["components"].([]any)
+	if !ok || len(comps) == 0 {
+		errf("flow.components must be a non-empty array")
+	}
+	for k, cv := range comps {
+		at := fmt.Sprintf("flow.components[%d]", k)
+		c, ok := cv.(map[string]any)
+		if !ok {
+			errf("%s must be an object", at)
+			continue
+		}
+		id, _ := c["id"].(string)
+		switch {
+		case !isStr(id):
+			errf("%s.id is required", at)
+		case compKind[id] != "":
+			errf("%s.id %q is duplicated", at, id)
+		default:
+			kind, _ := c["kind"].(string)
+			if kind == "" {
+				kind = "app"
+			}
+			compKind[id] = kind
+		}
+		if !isStr(c["name"]) {
+			errf("%s.name is required", at)
+		}
+		if c["kind"] != nil && !oneOf(c["kind"], ComponentKinds) {
+			errf("%s.kind must be one of: %s", at, list(ComponentKinds))
+		}
+	}
+
+	stepIDs := map[string]bool{}
+	roles := map[string]int{}
+	steps, ok := f["steps"].([]any)
+	if !ok || len(steps) < 2 {
+		errf("flow.steps must list at least 2 steps, in the order the code runs")
+	}
+	for k, sv := range steps {
+		at := fmt.Sprintf("flow.steps[%d]", k)
+		s, ok := sv.(map[string]any)
+		if !ok {
+			errf("%s must be an object", at)
+			continue
+		}
+		id, _ := s["id"].(string)
+		switch {
+		case !isStr(id):
+			errf("%s.id is required", at)
+		case stepIDs[id]:
+			errf("%s.id %q is duplicated", at, id)
+		}
+		comp, _ := s["component"].(string)
+		if compKind[comp] == "" {
+			errf("%s.component %q is not a component id", at, str(s["component"]))
+		}
+		if !isStr(s["title"]) {
+			errf("%s.title is required", at)
+		}
+		role := "normal"
+		if s["role"] != nil {
+			if !oneOf(s["role"], StepRoles) {
+				errf("%s.role must be one of: %s", at, list(StepRoles))
+			} else {
+				role = s["role"].(string)
+			}
+		}
+		roles[role]++
+		if s["location"] != nil {
+			loc, ok := s["location"].(map[string]any)
+			if !ok || !isStr(loc["path"]) {
+				errf("%s.location needs a path", at)
+			} else {
+				if loc["line"] != nil && !isInt(loc["line"]) {
+					errf("%s.location.line must be an integer", at)
+				}
+				if loc["url"] != nil && !isURL(loc["url"]) {
+					errf("%s.location.url must be an http(s) url", at)
+				}
+			}
+		} else if slices.Contains(BugRoles, role) && compKind[comp] != "external" && compKind[comp] != "process" && compKind[comp] != "storage" {
+			warnf("step %q is on the bug path but has no code location", str(s["id"]))
+		}
+		if s["snippet"] != nil && !isStr(s["snippet"]) {
+			errf("%s.snippet must be a string", at)
+		}
+		if s["fix"] != nil {
+			fx, ok := s["fix"].(map[string]any)
+			if !ok || !isStr(fx["label"]) {
+				errf("%s.fix needs a label", at)
+			} else if fx["url"] != nil && !isURL(fx["url"]) {
+				errf("%s.fix.url must be an http(s) url", at)
+			}
+		}
+		if s["alongside"] != nil {
+			if a, _ := s["alongside"].(string); !stepIDs[a] {
+				errf("%s.alongside must name an earlier step", at)
+			}
+		}
+		validateRefs(at, s["refs"], errf)
+		if isStr(id) {
+			stepIDs[id] = true
+		}
+	}
+
+	if f["edges"] != nil {
+		edges, ok := f["edges"].([]any)
+		if !ok {
+			errf("flow.edges must be an array")
+		}
+		for k, ev := range edges {
+			at := fmt.Sprintf("flow.edges[%d]", k)
+			e, ok := ev.(map[string]any)
+			if !ok {
+				errf("%s must be an object", at)
+				continue
+			}
+			for _, end := range []string{"from", "to"} {
+				if id, _ := e[end].(string); !stepIDs[id] {
+					errf("%s.%s %q is not a step id", at, end, str(e[end]))
+				}
+			}
+			if e["kind"] != nil && !oneOf(e["kind"], FlowEdgeKinds) {
+				errf("%s.kind must be one of: %s", at, list(FlowEdgeKinds))
+			}
+		}
+	}
+
+	if len(steps) >= 2 {
+		if roles["origin"] == 0 {
+			warnf(`no flow step has role "origin"; mark the step where the bug starts`)
+		}
+		if roles["symptom"] == 0 {
+			warnf(`no flow step has role "symptom"; mark the step where the user sees the bug`)
+		}
+	}
 }
 
 // BrowserModule returns an ES module exposing the definitions the dashboard needs.
@@ -333,5 +531,7 @@ export const NODE_STATUS = %s;
 export const RELATIONS = %s;
 export const TRAIL_STATUS = %s;
 export const SEVERITY = %s;
-`, j(Format), j(Lanes), j(KindLane), j(KindLabel), j(NodeStatus), j(Relations), j(TrailStatus), j(Severity)))
+export const STEP_ROLES = %s;
+export const BUG_ROLES = %s;
+`, j(Format), j(Lanes), j(KindLane), j(KindLabel), j(NodeStatus), j(Relations), j(TrailStatus), j(Severity), j(StepRoles), j(BugRoles)))
 }
