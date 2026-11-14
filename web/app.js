@@ -436,10 +436,11 @@ let gfx = null;
 let resizeTimer = null;
 let ro = null;
 
+// Measure with whatever font the page ends up using; the map names no font of its own.
 const textWidth = (() => {
   const ctx = document.createElement('canvas').getContext('2d');
   return (t, px, weight = 400) => {
-    ctx.font = `${weight} ${px}px ui-monospace, SFMono-Regular, Menlo, "Sukhumvit Set", Thonburi, "Noto Sans Thai", monospace`;
+    ctx.font = `${weight} ${px}px ${getComputedStyle(document.body).fontFamily}`;
     return ctx.measureText(String(t ?? '')).width;
   };
 })();
@@ -496,7 +497,7 @@ function drawFlow(el) {
     const pills = stepsOf.get(c.id);
     const nodeW = Math.max(150, textWidth(c.name, 13, 600), textWidth(c.detail, 12)) + 34;
     const extra = (st) => 44 + (st.role === 'origin' || st.role === 'symptom' ? 74 : 0) + (st.fix ? 46 : 0);
-    const pillW = pills.length ? Math.min(PILL_MAX, Math.max(...pills.map((st) => textWidth(st.title, 12) + extra(st)))) : 0;
+    const pillW = pills.length ? Math.min(PILL_MAX, Math.max(...pills.map((st) => textWidth(st.title, 12.5) + extra(st)))) : 0;
     // Pill heights come from the rendered text (measured below), so nothing is clipped.
     const pillH = pills.map(() => PILL_H);
     const w = Math.max(nodeW, pillW);
