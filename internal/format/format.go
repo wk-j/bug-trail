@@ -88,6 +88,7 @@ type Result struct {
 var (
 	repoRE = regexp.MustCompile(`^[^/\s]+/[^/\s]+$`)
 	urlRE  = regexp.MustCompile(`^https?://`)
+	langRE = regexp.MustCompile(`^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$`)
 )
 
 var dateLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02T15:04", "2006-01-02"}
@@ -156,6 +157,9 @@ func Validate(v any) Result {
 	}
 	if !isDate(t["analyzed_at"]) {
 		errf("analyzed_at must be an ISO 8601 date-time")
+	}
+	if t["language"] != nil && (!isStr(t["language"]) || !langRE.MatchString(t["language"].(string))) {
+		errf(`language must be a language tag such as "th" or "en"`)
 	}
 	if !isStr(t["analyzed_by"]) {
 		warnf("analyzed_by is missing (which agent/model wrote this?)")
@@ -347,10 +351,46 @@ func Validate(v any) Result {
 	}
 	if isV2 {
 		validateFlow(t["flow"], errf, warnf)
+		validateBackground(t["background"], errf, warnf)
 	} else {
 		warnf("this is a v1 trail with no code flow; run the bug-trail skill again to map the code path")
 	}
 	return r
+}
+
+// validateBackground checks the context a reader needs before the map makes sense:
+// what this part of the system does, the rule it must follow, and the domain terms.
+func validateBackground(v any, errf, warnf func(string, ...any)) {
+	if v == nil {
+		warnf("background is missing; explain how this part of the system works, the rule it must follow, and the terms a reader needs")
+		return
+	}
+	b, ok := v.(map[string]any)
+	if !ok {
+		errf("background must be an object")
+		return
+	}
+	if !isStr(b["context"]) {
+		errf("background.context is required: how this part of the system works, in plain words")
+	}
+	if b["rule"] != nil && !isStr(b["rule"]) {
+		errf("background.rule must be a string")
+	}
+	if b["terms"] != nil {
+		terms, ok := b["terms"].([]any)
+		if !ok {
+			errf("background.terms must be an array")
+		}
+		for k, tv := range terms {
+			tm, ok := tv.(map[string]any)
+			if !ok || !isStr(tm["term"]) || !isStr(tm["meaning"]) {
+				errf("background.terms[%d] needs a term and a meaning", k)
+			}
+		}
+	} else {
+		warnf("background.terms is empty; define the domain words the steps use")
+	}
+	validateRefs("background", b["refs"], errf)
 }
 
 // validateCases checks the concrete inputs: each names the steps the correct logic

@@ -748,5 +748,45 @@
   "next_steps": [
     "Review and merge go-gh #300 so corrupt entries are evicted and refetched, then bump go-gh in cli/cli.",
     "Until then, tell affected users to run `gh config clear-cache`."
-  ]
+  ],
+  "background": {
+    "context": "`gh pr list` with a filter flag such as `--author` uses GitHub's search API. Before searching, gh's feature detection asks the API which SearchType values the server supports, so the same command works against github.com and GitHub Enterprise.\n\nTo avoid asking on every run, gh wraps its HTTP client in an on-disk cache from the go-gh library: a response is stored as a file in gh's cache folder and reused for 24 hours. Several gh commands can run at the same time, and each is a separate process with its own copy of that cache code.",
+    "rule": "A cache entry must never be seen half-written. Writing to a temporary file and renaming it into place gives that guarantee: a reader sees the old entry or the new one, never a mix. That is the fix in go-gh #263.",
+    "terms": [
+      {
+        "term": "feature detection",
+        "meaning": "gh asking the API which features the server supports before using them."
+      },
+      {
+        "term": "SearchType",
+        "meaning": "GraphQL enum of search kinds; gh checks its values to decide how to search for pull requests."
+      },
+      {
+        "term": "go-gh",
+        "meaning": "GitHub's Go library that gh uses for API clients, including the HTTP cache."
+      },
+      {
+        "term": "HTTP cache",
+        "meaning": "go-gh stores API responses as files and reuses them for a time (24 hours here)."
+      },
+      {
+        "term": "fileStorage",
+        "meaning": "go-gh type in pkg/api/cache.go that writes and reads cache files."
+      },
+      {
+        "term": "atomic write",
+        "meaning": "Write a temp file, then rename it over the old one; readers never see a partial file."
+      },
+      {
+        "term": "gh config clear-cache",
+        "meaning": "Deletes gh's cache folder; the workaround for an entry that is already corrupted."
+      }
+    ],
+    "refs": [
+      {
+        "label": "go-gh #263",
+        "url": "https://github.com/cli/go-gh/pull/263"
+      }
+    ]
+  }
 }

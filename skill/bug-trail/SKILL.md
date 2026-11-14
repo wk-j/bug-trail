@@ -90,6 +90,10 @@ patterns (`grep -rn "store(" --include='*.go'`).
 
 Follow [FORMAT.md](FORMAT.md). The rules that matter most:
 
+- **Write in the issue's language** (or the one the user asks for), and set `language` to its
+  tag, such as `"th"`. That covers titles, details, background, cases and next steps. Keep code
+  names, field names, file paths, enum values and error messages exactly as they are in the code,
+  so they still match the code and the glossary.
 - **Components (2–6)** are the columns of the map. Merge small packages into the component that
   calls them. The kinds are: an app or CLI, a library, a service, storage
   (disk, database, cache), or an external system or other process. Name them the way the
@@ -101,6 +105,12 @@ Follow [FORMAT.md](FORMAT.md). The rules that matter most:
   in the title.
 - **Mark the bug path.** Exactly one `origin`, then `propagates` steps, then one `symptom`
   (more than one only if the issue reports separate symptoms). Steps before the bug are `normal`.
+- **Write the background first.** A reader can't follow the map without the domain. In
+  `background`, explain what this part of the system does and how data moves through it
+  (`context`), state the rule the code must follow and where it comes from (`rule`), and define
+  every domain word, field name, code and abbreviation the steps use (`terms`), spelled exactly
+  as in the steps. Take them from the issue (many issues have a glossary), the spec, the README
+  and code comments, and cite those in `refs`.
 - **Write the correct flow too.** The map shows both flows in one graph, so the reader learns
   what *should* happen. Steps both flows share get `path: "both"`. From where they split, add
   the steps the correct logic takes (`path: "correct"`), taken from the spec, the reference

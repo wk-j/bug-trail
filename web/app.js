@@ -96,6 +96,7 @@ async function showList() {
     return;
   }
   document.title = 'Bug Trail';
+  document.documentElement.lang = 'en';
   if (data.trails.length === 0) {
     app.innerHTML = `
       <div class="empty">
@@ -231,6 +232,8 @@ async function showTrail(fresh) {
   if (view.selected && !stepById.has(view.selected) && !nodeById.has(view.selected)) view.selected = null;
   if (flow) computeBugPath();
 
+  // Thai (or any) trail text gets the right lang for line breaking and fonts.
+  document.documentElement.lang = typeof trail.language === 'string' ? trail.language : 'en';
   const { issue = {}, summary = {} } = trail;
   document.title = `${issue.repo ?? ''}#${issue.number ?? ''} · Bug Trail`;
   const origin = flow?.steps.find((s) => s.role === 'origin');
@@ -251,6 +254,8 @@ async function showTrail(fresh) {
       ${summary.tldr ? `<div class="tldr">${richText(summary.tldr)}</div>` : ''}
       ${banner(validation)}
     </section>
+
+    ${backgroundSection(trail.background)}
 
     ${flow ? `
     <section class="panel flow-panel">
@@ -327,6 +332,7 @@ async function showTrail(fresh) {
     if (keep) { const s = document.querySelector('.flow-scroll'); s.scrollLeft = keep.x; s.scrollTop = keep.y; }
   }
   select(view.selected, fresh && !!view.selected);
+  linkTerms(app);
 }
 
 function banner(v) {
@@ -363,6 +369,63 @@ function timeline(issue, nodes) {
   return `<ol class="timeline">${items.map(row).join('')}${undated.map((n) => row({ node: n })).join('')}</ol>`;
 }
 
+// ---------- background and glossary ----------
+let glossary = []; // [{ term, meaning }], longest first
+
+function backgroundSection(bg) {
+  glossary = [];
+  if (!bg || typeof bg !== 'object' || !bg.context) return '';
+  const terms = (Array.isArray(bg.terms) ? bg.terms : []).filter((t) => t && t.term && t.meaning);
+  glossary = [...terms].sort((a, b) => b.term.length - a.term.length);
+  return `
+    <section class="background" id="background">
+      <h2 class="section-title">Background</h2>
+      <div class="bg-grid">
+        <div class="bg-main">
+          <div class="bg-context">${richText(bg.context)}</div>
+          ${bg.rule ? `<div class="bg-rule"><span class="lbl">The rule</span>${richText(bg.rule)}</div>` : ''}
+          ${Array.isArray(bg.refs) && bg.refs.length ? `<p class="bg-refs">${bg.refs.map((r) => `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label)}</a>`).join(' · ')}</p>` : ''}
+        </div>
+        ${terms.length ? `
+        <dl class="bg-terms">
+          ${terms.map((t) => `<div><dt><code>${esc(t.term)}</code></dt><dd>${inline(t.meaning)}</dd></div>`).join('')}
+        </dl>` : ''}
+      </div>
+    </section>`;
+}
+
+// Underline glossary terms wherever they appear, with the meaning on hover.
+function linkTerms(root) {
+  if (!root || !glossary.length) return;
+  const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?<![\\w])(${glossary.map((t) => escRe(t.term)).join('|')})(?![\\w])`, 'g');
+  const meaning = new Map(glossary.map((t) => [t.term, t.meaning]));
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement.closest('.term, .bg-terms, script, style, textarea, .snippet')
+      ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    re.lastIndex = 0;
+    if (!re.test(n.nodeValue)) continue;
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    for (const m of n.nodeValue.matchAll(re)) {
+      frag.append(n.nodeValue.slice(last, m.index));
+      const span = document.createElement('span');
+      span.className = 'term';
+      span.textContent = m[0];
+      span.title = `${m[0]}: ${meaning.get(m[0]).replace(/`/g, '')}`;
+      frag.append(span);
+      last = m.index + m[0].length;
+    }
+    frag.append(n.nodeValue.slice(last));
+    n.replaceWith(frag);
+  }
+}
+
 // ---------- the system map ----------
 // Components are boxes, grouped into containers by `group`; storage and external systems
 // stand in a column on the right. Steps hang under the box they run in as numbered pills,
@@ -376,7 +439,7 @@ let ro = null;
 const textWidth = (() => {
   const ctx = document.createElement('canvas').getContext('2d');
   return (t, px, weight = 400) => {
-    ctx.font = `${weight} ${px}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.font = `${weight} ${px}px ui-monospace, SFMono-Regular, Menlo, "Sukhumvit Set", Thonburi, "Noto Sans Thai", monospace`;
     return ctx.measureText(String(t ?? '')).width;
   };
 })();
@@ -434,17 +497,28 @@ function drawFlow(el) {
     const nodeW = Math.max(150, textWidth(c.name, 13, 600), textWidth(c.detail, 12)) + 34;
     const extra = (st) => 44 + (st.role === 'origin' || st.role === 'symptom' ? 74 : 0) + (st.fix ? 46 : 0);
     const pillW = pills.length ? Math.min(PILL_MAX, Math.max(...pills.map((st) => textWidth(st.title, 12) + extra(st)))) : 0;
-    // Long titles wrap to at most three lines instead of being cut off.
-    const pillH = pills.map((st) => {
-      const lines = Math.min(3, Math.max(1, Math.ceil(textWidth(st.title, 12) / Math.max(60, pillW - extra(st)))));
-      return lines === 1 ? PILL_H : 10 + lines * 15;
-    });
+    // Pill heights come from the rendered text (measured below), so nothing is clipped.
+    const pillH = pills.map(() => PILL_H);
     const w = Math.max(nodeW, pillW);
     const h = NODE_H + (pills.length ? 14 + pillH.reduce((x2, y2) => x2 + y2 + PILL_GAP, 0) - PILL_GAP : 0);
     size.set(c.id, { nodeW, pillW, pillH, w, h });
   }
 
   // Columns (shared by all groups so the flow reads left to right).
+  // Measure every pill at its final width with its real text and font.
+  const probe = document.createElement('div');
+  probe.className = 'pill-measure';
+  probe.innerHTML = flow.steps.map((st) => `<div class="step pill multi role-${esc(st.role)}" data-m="${esc(st.id)}" style="width:${size.get(st.component).pillW}px"><span class="num">${st.n}</span><span class="pt">${inline(st.title)}</span>${st.role === 'origin' ? '<span class="flag">bug starts</span>' : ''}${st.role === 'symptom' ? '<span class="flag sym">user sees</span>' : ''}${st.fix ? '<span class="flag fix">fixed</span>' : ''}</div>`).join('');
+  el.appendChild(probe);
+  const measured = new Map([...probe.children].map((d) => [d.dataset.m, Math.max(PILL_H, Math.ceil(d.getBoundingClientRect().height))]));
+  probe.remove();
+  for (const c of comps) {
+    const sz = size.get(c.id);
+    sz.pillH = stepsOf.get(c.id).map((st) => measured.get(st.id) ?? PILL_H);
+    sz.h = NODE_H + (sz.pillH.length ? 14 + sz.pillH.reduce((x2, y2) => x2 + y2 + PILL_GAP, 0) - PILL_GAP : 0);
+    sz.w = Math.max(sz.nodeW, sz.pillW);
+  }
+
   // Storage and external systems sit in their own band below the code, at their place in the order.
   const flowComps = order.filter((c) => !isStore(c));
   const stores = order.filter(isStore);
@@ -544,7 +618,7 @@ function drawFlow(el) {
           <b>${esc(c.name)}</b>${c.detail ? `<span>${esc(c.detail)}</span>` : ''}
         </div>
         ${stepsOf.get(c.id).map((s, k, all) => `
-          <div class="step pill${p.pillH[k] > PILL_H ? ' multi' : ''} ${flowCls(s)} role-${esc(s.role)}${caseOff(s.id) ? ' off' : ''}" data-id="${esc(s.id)}" tabindex="0" role="button"
+          <div class="step pill multi ${flowCls(s)} role-${esc(s.role)}${caseOff(s.id) ? ' off' : ''}" data-id="${esc(s.id)}" tabindex="0" role="button"
                title="${esc(s.title)}${s.location?.path ? ` — ${esc(locLabel(s.location))}` : ''}"
                style="left:${px}px;top:${p.y + NODE_H + 14 + p.pillH.slice(0, k).reduce((x2, y2) => x2 + y2 + PILL_GAP, 0)}px;width:${p.pillW}px;height:${p.pillH[k]}px">
             <span class="num">${s.n}</span>
@@ -564,6 +638,7 @@ function drawFlow(el) {
       slotL: p.x + shift, slotR: p.x + shift + p.w,
       stackBottom: p.y + p.h, pills: stepsOf.get(c.id).length });
   }
+  linkTerms(el);
   gfx = { boxes, cedges, height, contentBottom, skips: new Set(skips), ups: new Set(ups), bandOfComp,
     laneTop: new Map([...skips, ...ups].map((e) => [e, groups[groupOf.get(e.from)].laneTop])) };
   drawWires(width, height);
@@ -726,6 +801,7 @@ function renderDrawer() {
   drawer.hidden = false;
   document.body.classList.add('drawer-open');
   drawer.innerHTML = s ? stepDetail(s) : nodeDetail(n);
+  linkTerms(drawer);
   drawer.scrollTop = 0;
 }
 
@@ -803,6 +879,7 @@ document.addEventListener('click', (e) => {
     const c = activeCase();
     if (view.selected && stepById.has(view.selected) && !c.correct.includes(view.selected) && !c.bug.includes(view.selected)) view.selected = null;
     document.getElementById('casebar').innerHTML = caseBar();
+    linkTerms(document.getElementById('casebar'));
     computeBugPath();
     drawFlow(document.getElementById('flow'));
     return select(view.selected, false);

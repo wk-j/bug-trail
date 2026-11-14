@@ -547,5 +547,23 @@
         "does": "`totalSize` wraps negative; the server rejects the session with HTTP 400"
       }
     ]
+  },
+  "background": {
+    "context": "The photo-sync app uploads a video in chunks. The upload core plans the upload from the file size, `ChunkPlan`, then asks the Sync API to open an upload session with the number of chunks. The server only accepts a positive chunk count.",
+    "rule": "Byte counts must be stored in 64-bit integers: a phone video can be larger than 2,147,483,647 bytes, the largest value an `int32` holds.",
+    "terms": [
+      {
+        "term": "ChunkPlan",
+        "meaning": "Struct in core/upload that holds the file size and how it is split into chunks."
+      },
+      {
+        "term": "int32",
+        "meaning": "32-bit signed integer; values above 2,147,483,647 wrap around to negative numbers."
+      },
+      {
+        "term": "upload session",
+        "meaning": "Server-side record created by `POST /sessions` before any chunk is sent."
+      }
+    ]
   }
 }

@@ -45,6 +45,8 @@ func minimal() map[string]any {
 	      "correct": ["s1", "ok"], "bug": ["s1", "s2", "s3"], "should": "Saved", "does": "Crashes"}],
 	    "edges": [{"from": "s1", "to": "s2", "kind": "call"}, {"from": "s2", "to": "s3", "kind": "error"}]
 	  },
+	  "background": {"context": "The editor saves files.", "rule": "Names are cut by character.",
+	    "terms": [{"term": "ShortName", "meaning": "Shortens a file name"}]},
 	  "nodes": [
 	    {"id": "a", "kind": "report", "title": "A", "refs": [{"label": "issue", "url": "https://github.com/o/r/issues/1"}]},
 	    {"id": "b", "kind": "hypothesis", "title": "B"}
@@ -94,6 +96,10 @@ func TestValidate(t *testing.T) {
 		{"case uses unknown step", func(m map[string]any) { kase(m)["bug"] = []any{"s1", "zz"} }, `unknown step "zz"`},
 		{"correct route through bug step", func(m map[string]any) { kase(m)["correct"] = []any{"s1", "s3"} }, "bug-only step"},
 		{"bug route through correct step", func(m map[string]any) { kase(m)["bug"] = []any{"s1", "ok"} }, "correct-only step"},
+		{"background without context", func(m map[string]any) { m["background"] = map[string]any{"rule": "x"} }, "background.context is required"},
+		{"term without meaning", func(m map[string]any) {
+			m["background"].(map[string]any)["terms"] = []any{map[string]any{"term": "x"}}
+		}, "needs a term and a meaning"},
 		{"flow edge to nowhere", func(m map[string]any) { flow(m)["edges"].([]any)[0].(map[string]any)["to"] = "s9" }, `to "s9"`},
 	}
 	for _, c := range cases {

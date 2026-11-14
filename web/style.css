@@ -34,7 +34,7 @@
   --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 1px rgba(15, 23, 42, .04);
   --shadow-lg: 0 6px 20px rgba(15, 23, 42, .12);
   --radius: 10px;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Sukhumvit Set", "Thonburi", "Noto Sans Thai", "Leelawadee UI", system-ui, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -461,3 +461,35 @@ marker.w-ok path { fill: var(--good); }
 .lists { padding: 0; }
 .lists h3:first-child { margin-top: 0; }
 .noflow .placeholder { padding: 0; }
+
+/* ---------- background ---------- */
+.section-title { font-size: 13px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.background { margin-top: 30px; }
+.bg-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 1000px) { .bg-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+.bg-context { font-size: 15px; line-height: 1.65; }
+.bg-context p { margin: 0 0 10px; }
+.bg-rule { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--ok-bg); color: var(--ok-fg); font-size: 14.5px; line-height: 1.6; }
+.bg-rule .lbl { display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.bg-rule p { margin: 0 0 6px; color: var(--text); }
+.bg-rule p:last-child { margin-bottom: 0; }
+.bg-refs { font-size: 13px; margin: 10px 0 0; }
+.bg-terms { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--border); }
+.bg-terms > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; line-height: 1.5; }
+.bg-terms dt { margin: 0; }
+.bg-terms dt code { font-size: 12.5px; white-space: normal; word-break: break-word; }
+.bg-terms dd { margin: 0; color: var(--muted); }
+@media (max-width: 560px) { .bg-terms > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+.term { text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 3px; cursor: help; }
+.bg-terms { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; border-top: 0; }
+.bg-terms > div { grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+@media (max-width: 560px) { .bg-terms { grid-template-columns: minmax(0, 1fr); } }
+.bg-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.bg-main { max-width: 1000px; }
+.bg-terms { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); column-gap: 28px; }
+.bg-terms > div { align-content: start; }
+
+/* Pills size to their text (measured before layout), so no clamp is needed. */
+.step.pill.multi .pt { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.pill-measure { position: absolute; visibility: hidden; left: -9999px; top: 0; }
+.pill-measure .step.pill { position: relative; height: auto; }

@@ -10,9 +10,11 @@ the map. `nodes` and `edges` record the investigation around it.
 |------------------|-----------------|----------|-------|
 | `format`         | `"bug-trail/v2"`| yes      | v1 files (no `flow`) still load, with a warning. |
 | `analyzed_at`    | ISO date-time   | yes      | When you wrote the analysis. |
+| `language`       | string          | no       | Language of the trail's text, such as `"th"` or `"en"` (default). |
 | `analyzed_by`    | string          | no       | Agent and model, for example `"Claude Code (claude-opus-5-5)"`. |
 | `issue`          | object          | yes      | See below. |
 | `summary`        | object          | yes      | See below. |
+| `background`     | object          | no*      | What a reader needs to know first. See below. *Warned if missing. |
 | `flow`           | object          | yes      | **The code path.** See below. |
 | `nodes`          | Node[]          | no       | The investigation: report, evidence, hypotheses, PRs, release. |
 | `edges`          | Edge[]          | no       | Links between investigation nodes. |
@@ -33,6 +35,27 @@ required. Optional: `author`, `created_at`, `closed_at`, `labels` (string[]), `a
 | `status`     | `new`, `investigating`, `root_caused`, `fix_in_progress`, `fixed`, `wont_fix`, `duplicate`, `cannot_reproduce` |
 | `severity`   | `critical`, `high`, `medium`, `low` |
 | `confidence` | 0–1. How sure you are of the origin and status. |
+
+## Background
+
+The page shows this above the map, because nobody can follow the bug without knowing what this
+part of the system is for and what it is supposed to do.
+
+```json
+"background": {
+  "context": "What this part of the system does, in plain words, for someone new to it.",
+  "rule": "The rule the code must follow, and where it comes from (spec, CR, reference version).",
+  "terms": [{ "term": "tempRpNo", "meaning": "Temporary receipt number from the index file." }],
+  "refs": [{ "label": "CR12 item 1", "url": "https://…" }]
+}
+```
+
+| Field     | Notes |
+|-----------|-------|
+| `context` | Required. Two short paragraphs at most: the job of this part of the system and how data moves through it. |
+| `rule`    | The correct behaviour the bug breaks, stated so the reader can check each case against it. |
+| `terms`   | Domain words, field names, codes and abbreviations the steps use. The page underlines each one wherever it appears and shows the meaning on hover, so use the exact spelling the steps use. |
+| `refs`    | Where the context and rule come from. |
 
 ## Flow
 
