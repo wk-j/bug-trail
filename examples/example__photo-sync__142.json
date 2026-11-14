@@ -1,0 +1,171 @@
+{
+  "format": "bug-trail/v1",
+  "analyzed_at": "2026-11-14T09:30:00Z",
+  "analyzed_by": "Hand-written example (fictional issue)",
+  "issue": {
+    "url": "https://github.com/example/photo-sync/issues/142",
+    "repo": "example/photo-sync",
+    "number": 142,
+    "title": "Upload fails for videos larger than 2 GB",
+    "state": "closed",
+    "author": "mira-dev",
+    "created_at": "2026-09-02T08:14:00Z",
+    "closed_at": "2026-09-19T16:40:00Z",
+    "labels": ["bug", "uploads", "p1"]
+  },
+  "summary": {
+    "headline": "Uploads over 2 GB fail because the file size is stored in a 32-bit integer",
+    "tldr": "Any file larger than 2,147,483,647 bytes overflows `ChunkPlan.totalSize`, so the uploader asks for a negative number of chunks and the server rejects the session with HTTP 400. Fixed in PR #151 by switching to `int64`; a regression test with a sparse 3 GB file was added.",
+    "status": "fixed",
+    "severity": "high",
+    "confidence": 0.92
+  },
+  "nodes": [
+    {
+      "id": "report",
+      "kind": "report",
+      "title": "Uploading a 2.4 GB video fails at 0%",
+      "detail": "The reporter shared a phone video. The progress bar never moves and the app shows \"Upload failed, try again\". Smaller videos from the same phone upload fine.",
+      "status": "confirmed",
+      "at": "2026-09-02T08:14:00Z",
+      "actor": "mira-dev",
+      "refs": [{ "label": "issue #142", "url": "https://github.com/example/photo-sync/issues/142" }]
+    },
+    {
+      "id": "env",
+      "kind": "environment",
+      "title": "Android and desktop, v3.8.0 and later",
+      "detail": "Three other users confirm the problem on Android 15 and on the Windows desktop client. Nobody can reproduce it on v3.7.",
+      "status": "confirmed",
+      "at": "2026-09-03T11:20:00Z",
+      "refs": [{ "label": "comment by tkato", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1001" }]
+    },
+    {
+      "id": "sym",
+      "kind": "symptom",
+      "title": "Server answers HTTP 400 \"chunk_count must be positive\"",
+      "detail": "The debug log shows the client's create-session request with `chunk_count: -1048`. The server rejects it before any bytes are sent.",
+      "status": "confirmed",
+      "at": "2026-09-04T09:02:00Z",
+      "actor": "tkato",
+      "refs": [{ "label": "debug log in comment", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1002" }]
+    },
+    {
+      "id": "h-net",
+      "kind": "hypothesis",
+      "title": "Proxy or CDN times out on long uploads",
+      "detail": "First guess from a maintainer: large uploads hit the 60 s proxy timeout.",
+      "status": "rejected",
+      "at": "2026-09-04T10:30:00Z",
+      "actor": "sam-maint",
+      "refs": [{ "label": "comment by sam-maint", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1003" }]
+    },
+    {
+      "id": "ev-zero",
+      "kind": "evidence",
+      "title": "Fails instantly, before any data is sent",
+      "detail": "The failure happens within 200 ms at 0 bytes transferred, so a timeout on a long transfer cannot be the cause.",
+      "status": "confirmed",
+      "at": "2026-09-04T12:10:00Z",
+      "actor": "tkato",
+      "refs": [{ "label": "comment by tkato", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1004" }]
+    },
+    {
+      "id": "h-overflow",
+      "kind": "hypothesis",
+      "title": "File size overflows a 32-bit integer",
+      "detail": "A negative chunk count for a file just over 2 GB points at signed 32-bit overflow: 2.4 GB wraps to a negative number.",
+      "status": "confirmed",
+      "at": "2026-09-05T08:45:00Z",
+      "actor": "sam-maint",
+      "refs": [{ "label": "comment by sam-maint", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1005" }]
+    },
+    {
+      "id": "ev-bisect",
+      "kind": "evidence",
+      "title": "Bisected to the chunk-planner refactor in v3.8.0",
+      "detail": "`git bisect` between v3.7.2 and v3.8.0 lands on commit `a1b2c3d`, \"Move chunk planning into ChunkPlan\".",
+      "status": "confirmed",
+      "at": "2026-09-08T14:00:00Z",
+      "actor": "sam-maint",
+      "refs": [{ "label": "commit a1b2c3d", "url": "https://github.com/example/photo-sync/commit/a1b2c3d" }]
+    },
+    {
+      "id": "rc",
+      "kind": "root_cause",
+      "title": "ChunkPlan.totalSize is declared as int32",
+      "detail": "The refactor copied the size into a new `ChunkPlan` struct whose `totalSize` field is `int32`. The old code used `int64` throughout. Any file of 2^31 bytes or more wraps negative, and `chunkCount = ceil(totalSize / chunkSize)` goes negative with it.",
+      "status": "confirmed",
+      "at": "2026-09-08T15:30:00Z",
+      "refs": [{ "label": "PR #151 description", "url": "https://github.com/example/photo-sync/pull/151" }]
+    },
+    {
+      "id": "code",
+      "kind": "code",
+      "title": "core/upload/chunk_plan.go: totalSize int32",
+      "detail": "`type ChunkPlan struct { totalSize int32; chunkSize int32 }`",
+      "status": "confirmed",
+      "refs": [{ "label": "chunk_plan.go at a1b2c3d", "url": "https://github.com/example/photo-sync/blob/a1b2c3d/core/upload/chunk_plan.go" }]
+    },
+    {
+      "id": "wa",
+      "kind": "workaround",
+      "title": "Downgrade to v3.7.2 or trim the video",
+      "detail": "Suggested while the fix was in review.",
+      "status": "done",
+      "at": "2026-09-09T09:00:00Z",
+      "refs": [{ "label": "comment by sam-maint", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1006" }]
+    },
+    {
+      "id": "pr",
+      "kind": "pr",
+      "title": "PR #151: use int64 for sizes in ChunkPlan",
+      "detail": "Changes `totalSize` to `int64` and adds a check that rejects a non-positive chunk count with a clear error instead of sending it to the server.",
+      "status": "done",
+      "at": "2026-09-17T10:05:00Z",
+      "actor": "sam-maint",
+      "refs": [{ "label": "PR #151", "url": "https://github.com/example/photo-sync/pull/151" }]
+    },
+    {
+      "id": "ver-test",
+      "kind": "verification",
+      "title": "Regression test uploads a sparse 3 GB file",
+      "detail": "`TestChunkPlanLargeFile` creates a sparse 3 GB file and checks the chunk count. It fails on v3.8.0 and passes with the fix.",
+      "status": "done",
+      "at": "2026-09-17T10:05:00Z",
+      "refs": [{ "label": "PR #151 tests", "url": "https://github.com/example/photo-sync/pull/151/files" }]
+    },
+    {
+      "id": "ver-user",
+      "kind": "verification",
+      "title": "Reporter confirms the 2.4 GB video uploads in v3.8.2",
+      "status": "confirmed",
+      "at": "2026-09-19T16:30:00Z",
+      "actor": "mira-dev",
+      "refs": [{ "label": "comment by mira-dev", "url": "https://github.com/example/photo-sync/issues/142#issuecomment-1010" }]
+    }
+  ],
+  "edges": [
+    { "from": "report", "to": "sym", "relation": "leads_to", "note": "Debug logging requested to see the server response" },
+    { "from": "env", "to": "sym", "relation": "relates", "note": "Only v3.8.0+ is affected" },
+    { "from": "sym", "to": "h-net", "relation": "leads_to" },
+    { "from": "ev-zero", "to": "h-net", "relation": "refutes", "note": "Fails at 0 bytes, so no long transfer is involved" },
+    { "from": "sym", "to": "h-overflow", "relation": "leads_to", "note": "A negative chunk count is the clue" },
+    { "from": "ev-bisect", "to": "h-overflow", "relation": "supports" },
+    { "from": "h-overflow", "to": "rc", "relation": "leads_to" },
+    { "from": "code", "to": "rc", "relation": "causes" },
+    { "from": "rc", "to": "sym", "relation": "causes" },
+    { "from": "wa", "to": "report", "relation": "mitigates" },
+    { "from": "pr", "to": "rc", "relation": "fixes" },
+    { "from": "ver-test", "to": "pr", "relation": "verifies" },
+    { "from": "ver-user", "to": "pr", "relation": "verifies" }
+  ],
+  "story": ["report", "sym", "h-net", "ev-zero", "h-overflow", "ev-bisect", "rc", "pr", "ver-test", "ver-user"],
+  "open_questions": [
+    "Do other structs created in the v3.8.0 refactor also use int32 for byte counts?"
+  ],
+  "next_steps": [
+    "Audit core/upload for other int32 size fields.",
+    "Add a lint rule that flags int32 fields named *Size or *Bytes."
+  ]
+}
