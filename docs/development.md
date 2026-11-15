@@ -21,6 +21,7 @@ web/                 the dashboard
 e2e/                 end-to-end cases: build the binary, drive the CLI and HTTP (see e2e/README.md)
 examples/            a fictional trail and a real one (cli/cli#14394) written by the skill
 docs/                these pages
+.goreleaser.yaml     release builds and the Homebrew cask (see releasing.md)
 ```
 
 ## Rules of thumb

@@ -15,12 +15,13 @@ Bug Trail is a single Go binary with two jobs:
 
 ## Requirements
 
-Go 1.24 or later to build; no other dependencies. Agents also need the GitHub CLI (`gh`), logged in.
+Homebrew (macOS or Linux), or Go 1.24 or later to build from source; no other dependencies.
+Agents also need the GitHub CLI (`gh`), logged in.
 
 ## Quick start
 
 ```bash
-go install github.com/wk-j/bug-trail@latest   # private repo: set GOPRIVATE=github.com/wk-j/* first
+brew install wk-j/tap/bug-trail                 # or: go install github.com/wk-j/bug-trail@latest
 bug-trail skill setup                           # install the skill into the agents on this machine
 bug-trail serve --open                          # dashboard on http://localhost:4317
 ```
@@ -43,4 +44,5 @@ To share trails with a team, [deploy a server](docs/deploy.md) and point each ma
 - [Configuration](docs/configuration.md)
 - [Deploy a shared server](docs/deploy.md)
 - [Development](docs/development.md)
+- [Releasing](docs/releasing.md)
 - [Trail format](skill/bug-trail/FORMAT.md)
