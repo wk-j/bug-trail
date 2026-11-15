@@ -37,7 +37,7 @@ var webFiles embed.FS
 //go:embed all:skill/bug-trail
 var skillFiles embed.FS
 
-var version = "0.2.0"
+var version = "0.3.0"
 
 // builtinDir is the trails folder when nothing else is set.
 func builtinDir() string {
