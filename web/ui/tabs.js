@@ -7,3 +7,11 @@ export function Tabs({ label = '', items = [] } = {}) {
     ${items.map((it) => `<button type="button" class="${cx('ui-tab', it.active && 'is-active')}" role="tab"${attrs({ 'aria-selected': String(!!it.active), ...it.attrs })}>${it.html}</button>`).join('')}
   </div>`;
 }
+
+/** Choose `tab` among its siblings in place, so the change animates instead of redrawing. */
+export function selectTab(tab) {
+  for (const t of tab.closest('.ui-tabs').querySelectorAll('.ui-tab')) {
+    t.classList.toggle('is-active', t === tab);
+    t.setAttribute('aria-selected', String(t === tab));
+  }
+}

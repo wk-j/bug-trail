@@ -28,3 +28,6 @@
 }
 .ui-cork__surface.fits { overflow: visible; }
 @media (max-width: 640px) { .ui-cork { padding: 0 8px 8px; } }
+
+/* Arriving: the board is hung, then its notes are pinned on (map/board.css). */
+:root[data-enter] .ui-cork { animation: var(--motion-slow) var(--ease-out) calc(min(var(--i), 14) * var(--motion-stagger)) backwards ui-rise; }

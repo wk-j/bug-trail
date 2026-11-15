@@ -20,8 +20,9 @@
 .ui-folder--open > .ui-folder__stamp { right: 44px; top: 40px; }
 
 /* A folder in a stack: lifts when you point at it. */
-.ui-folder--link { transition: transform .15s, box-shadow .15s; }
-.ui-folder--link:hover { text-decoration: none; transform: translateY(-3px) rotate(-.3deg); box-shadow: var(--shadow-lift); }
+.ui-folder--link { transition: transform var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); }
+.ui-folder--link:hover { text-decoration: none; transform: translateY(var(--motion-lift)) rotate(-.3deg); box-shadow: var(--shadow-lift); }
+.ui-folder--link:active { transform: translateY(0) rotate(-.15deg); box-shadow: var(--shadow-paper); transition-duration: calc(var(--motion-fast) / 2); }
 
 /* The open folder: a typed sheet of paper clipped inside it. */
 .ui-folder--open { padding: 18px 18px 18px; }
@@ -41,3 +42,6 @@
   .ui-folder__stamp { right: 10px; top: 8px; transform: scale(.75); transform-origin: top right; }
   .ui-folder--open > .ui-folder__stamp { right: 18px; top: 16px; transform: scale(.62); }
 }
+
+/* Arriving: dealt onto the desk from just below, one after another in a stack. */
+:root[data-enter] .ui-folder { animation: var(--motion-slow) var(--ease-out) calc(min(var(--i), 14) * var(--motion-stagger)) backwards ui-rise; }

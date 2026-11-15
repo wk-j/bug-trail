@@ -6,6 +6,7 @@ import { esc, inline } from '/lib/html.js';
 import { store, caseOff, wireOn } from '/lib/store.js';
 import { isBugStep, isStore, locLabel } from '/lib/model.js';
 import { linkTerms } from '/lib/glossary.js';
+import { settle } from '/lib/motion.js';
 import { IndexCard } from '/ui/index-card.js';
 import { StickyNote } from '/ui/sticky-note.js';
 
@@ -34,7 +35,7 @@ const noteFlags = (s) => [
 ];
 const noteTilt = (s) => ((s.n * 37) % 7 - 3) * 0.35;
 
-function note(s, { width, top, left, height, measure = false } = {}) {
+function note(s, { width, top, left, height, measure = false, i = 0 } = {}) {
   return StickyNote({
     n: s.n,
     html: inline(s.title),
@@ -46,7 +47,8 @@ function note(s, { width, top, left, height, measure = false } = {}) {
       'data-id': s.id, tabindex: '0', role: 'button',
       title: `${s.title}${s.location?.path ? ` — ${locLabel(s.location)}` : ''}`,
     },
-    style: measure ? `width:${width}px` : `left:${left}px;top:${top}px;width:${width}px;height:${height}px`,
+    // --i: the order notes are stuck on when the board is first drawn (ui/sticky-note.css).
+    style: measure ? `width:${width}px` : `left:${left}px;top:${top}px;width:${width}px;height:${height}px;--i:${i}`,
   });
 }
 
@@ -203,15 +205,15 @@ export function drawBoard(el) {
     <div class="board" id="canvas" style="height:${height}px">
       ${sheets.map((g) => `<div class="board-group" style="left:${g.l + shift}px;top:${g.t}px;width:${g.r - g.l}px;height:${g.b - g.t}px"><span class="board-group__tape">${esc(g.label)}</span></div>`).join('')}
       <svg class="board-yarn" id="wires"></svg>
-      ${comps.map((c) => {
+      ${comps.map((c, ci) => {
         const p = place.get(c.id);
         const nx = p.x + shift + (p.w - p.nodeW) / 2;
         const px = p.x + shift + (p.w - p.noteW) / 2;
         return IndexCard({
           title: c.name, sub: c.detail, kind: c.kind || 'app', cls: 'cnode',
-          attrs: { 'data-comp': c.id }, style: `left:${nx}px;top:${p.y}px;width:${p.nodeW}px;height:${NODE_H}px`,
+          attrs: { 'data-comp': c.id }, style: `left:${nx}px;top:${p.y}px;width:${p.nodeW}px;height:${NODE_H}px;--i:${ci}`,
         }) + stepsOf.get(c.id).map((s, k) => note(s, {
-          left: px, width: p.noteW, height: p.noteH[k],
+          left: px, width: p.noteW, height: p.noteH[k], i: ci + k + 1,
           top: p.y + NODE_H + 18 + p.noteH.slice(0, k).reduce((a, b) => a + b + NOTE_GAP, 0),
         })).join('');
       }).join('')}
@@ -234,7 +236,7 @@ export function drawBoard(el) {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const f = document.getElementById('flow');
-      if (f && Math.abs(f.parentElement.clientWidth - avail) > 4) { drawBoard(f); focusStep(store.view?.selected); markSelected(); }
+      if (f && Math.abs(f.parentElement.clientWidth - avail) > 4) { settle(); drawBoard(f); focusStep(store.view?.selected); markSelected(); }
     }, 100);
   });
   ro.observe(el.parentElement);
@@ -259,7 +261,7 @@ function drawYarn(width, height) {
 
   let backIdx = 0;
   const laneUsed = new Map();
-  const paths = cedges.map((e) => {
+  const paths = cedges.map((e, ei) => {
     const a = boxes.get(e.from), b = boxes.get(e.to);
     const o = offset(e);
     let d;
@@ -299,13 +301,25 @@ function drawYarn(width, height) {
     const steps = [...new Set(e.edges.flatMap((x) => [x.from, x.to]))].join(' ');
     const on = e.edges.some(wireOn);
     const title = e.edges.map((x) => `${stepById.get(x.from).n} → ${stepById.get(x.to).n}${x.label ? `: ${x.label}` : ''}`).join('\n');
-    return `<path class="wire board-strand w-${e.kind}${on ? '' : ' off'}${e.kind === 'norm' && b.l <= a.r ? ' dashed' : ''}" data-steps="${esc(steps)}" d="${d}" marker-end="url(#m-${e.kind})"><title>${esc(title)}</title></path>`;
+    const dashed = e.kind === 'conc' || (e.kind === 'norm' && b.l <= a.r);
+    // Solid yarn is measured as length 1 so board.css can draw it along its length as it arrives.
+    return `<path class="wire board-strand w-${e.kind}${on ? '' : ' off'}${dashed && e.kind === 'norm' ? ' dashed' : ''}" data-steps="${esc(steps)}" data-e="${ei}" d="${d}"${dashed ? '' : ' pathLength="1"'} style="--i:${ei}" marker-end="url(#m-${e.kind})"><title>${esc(title)}</title></path>`;
   });
   // A thread from each card down through its notes.
   const threads = [...boxes.values()].filter((bx) => bx.notes).map((bx) =>
     `<line class="board-thread" x1="${bx.cx}" y1="${bx.b}" x2="${bx.cx}" y2="${bx.stackBottom - 12}"/>`);
   paths.sort((p, q) => (/w-(bug|ok)/.test(p) ? 1 : 0) - (/w-(bug|ok)/.test(q) ? 1 : 0));
   svg.innerHTML = `<defs>${['norm', 'bug', 'conc', 'ok'].map(marker).join('')}</defs>${threads.join('')}${paths.join('')}`;
+}
+
+/** The active case changed: dim what it doesn't touch, in place, so the change fades over. */
+export function applyCase(el) {
+  if (!el || !store.flow) return;
+  el.querySelectorAll('.step').forEach((s) => s.classList.toggle('off', caseOff(s.dataset.id)));
+  el.querySelectorAll('.wire').forEach((w) => {
+    const e = gfx.cedges[Number(w.dataset.e)];
+    if (e) w.classList.toggle('off', !e.edges.some(wireOn));
+  });
 }
 
 /** Highlight a step, the steps it connects to, their cards and the yarn between them. */

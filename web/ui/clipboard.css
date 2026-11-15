@@ -6,11 +6,21 @@
     repeating-linear-gradient(90deg, rgba(0, 0, 0, .03) 0 1px, transparent 1px 4px),
     linear-gradient(180deg, #a87a4f, #8b5f37);
   box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 0 0 1px rgba(0, 0, 0, .25);
-  animation: ui-clip-in .18s ease-out;
+  animation: var(--motion-slow) var(--ease-out) ui-clip-in;
+  view-transition-name: clipboard;  /* keeps still while the page behind it crossfades */
 }
 .ui-clipboard[hidden] { display: none; }
-@keyframes ui-clip-in { from { transform: translateX(30px) rotate(1deg); opacity: .4; } to { transform: none; opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .ui-clipboard { animation: none; } }
+/* Slid in from the side, set down, and slid away again (lib: hideClipboard). */
+.ui-clipboard.is-leaving { animation: var(--motion-base) var(--ease-in) forwards ui-clip-out; pointer-events: none; }
+@keyframes ui-clip-in { from { opacity: 0; translate: var(--motion-slide) 0; rotate: .8deg; } }
+@keyframes ui-clip-out { to { opacity: 0; translate: var(--motion-slide) 0; rotate: .8deg; } }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes ui-clip-in { from { opacity: 0; } }
+  @keyframes ui-clip-out { to { opacity: 0; } }
+}
+/* A new page clipped on top of the last one. */
+.ui-clipboard.is-turning .ui-clipboard__sheet { animation: var(--motion-base) var(--ease-out) ui-clip-turn; }
+@keyframes ui-clip-turn { from { opacity: .3; translate: 0 calc(var(--motion-rise) / -2); } }
 
 /* The metal clip across the top. */
 .ui-clipboard__clip {
