@@ -51,3 +51,6 @@
   background-position: 0 0, 0 47px, 0 0;
   border-radius: 4px;
 }
+
+/* Arriving: slid onto the desk from just below. */
+:root[data-enter] .ui-sheet { animation: var(--motion-slow) var(--ease-out) calc(min(var(--i), 14) * var(--motion-stagger)) backwards ui-rise; }

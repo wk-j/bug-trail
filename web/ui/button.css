@@ -5,17 +5,27 @@
   color: var(--ink-2);
   background: linear-gradient(180deg, #fffdf6 0%, #efe6d2 55%, #e2d5b9 100%);
   box-shadow: var(--bevel), 0 2px 0 #b9a888, 0 3px 5px rgba(0, 0, 0, .25);
-  transition: transform .06s, box-shadow .06s;
+  position: relative;
+  transition: transform var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out), opacity var(--motion-base);
 }
-.ui-btn:hover:not(:disabled) { background: linear-gradient(180deg, #ffffff 0%, #f5edda 55%, #e9ddc2 100%); }
+/* A sheen that brightens the key under the pointer (fades, so the hover isn't a jump). */
+.ui-btn::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, .15));
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+.ui-btn:hover:not(:disabled)::after { opacity: .6; }
 .ui-btn:active:not(:disabled) {
   transform: translateY(2px);
   box-shadow: inset 0 2px 3px rgba(0, 0, 0, .2), 0 0 0 #b9a888, 0 1px 2px rgba(0, 0, 0, .2);
+  transition-duration: calc(var(--motion-fast) / 3);
 }
 .ui-btn:disabled { opacity: .5; cursor: default; }
 .ui-btn[hidden] { display: none; }
 .ui-btn--key { padding: 4px 9px; min-width: 30px; justify-content: center; }
 .ui-btn--flat {
   background: none; border-color: transparent; box-shadow: none; padding: 4px 8px; color: inherit;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
+.ui-btn--flat::after { display: none; }
 .ui-btn--flat:hover:not(:disabled) { background: rgba(0, 0, 0, .06); }

@@ -31,6 +31,10 @@ docs/                these pages
   `skill/bug-trail/FORMAT.md` in step.
 - Build UI from components in `web/ui/`: add or extend a component rather than styling something
   inside a page. Materials (paper, cork, yarn, stamps) are tokens in `web/ui/tokens.css`.
+- Motion is part of each component's stylesheet, on the timing, easing and distance tokens in
+  `tokens.css`; reduced motion zeroes the distances so only fades remain. Entrances play only while
+  the root has `data-enter` (a page being opened), and `lib/motion.js` sends page changes and live
+  redraws through the View Transitions API where the browser has it.
 - The map names no font family, so the browser picks fonts for any language, Thai included.
 - `web/` and `skill/` are embedded with `go:embed`: rebuild after editing them. Agents get the new
   guide from the rebuilt binary through `bug-trail skill show`, with nothing to reinstall.

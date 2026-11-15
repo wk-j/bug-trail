@@ -6,13 +6,18 @@ import { Folder } from '/ui/folder.js';
 import { Stamp } from '/ui/stamp.js';
 import { Tag, Meter } from '/ui/tag.js';
 import { Sheet } from '/ui/sheet.js';
+import { now } from '/lib/motion.js';
 
-export async function renderList(app) {
+/** commit(update) puts the new page up (lib/motion.js: page, refresh); it defaults to at once. */
+export async function renderList(app, { commit = now } = {}) {
   let data;
   try { data = await getJSON('/api/trails'); } catch (e) {
-    app.innerHTML = Sheet({ title: "Can't load trails", body: `<p>${esc(e.message)}</p>`, tape: true });
-    return;
+    return commit(() => { app.innerHTML = Sheet({ title: "Can't load trails", body: `<p>${esc(e.message)}</p>`, tape: true }); });
   }
+  return commit(() => paint(app, data));
+}
+
+function paint(app, data) {
   document.title = 'Bug Trail';
   document.documentElement.lang = 'en';
 

@@ -31,3 +31,25 @@ main { padding: 26px 24px 60px; max-width: 1720px; margin: 0 auto; display: grid
 
 /* Glossary terms linked anywhere on the page */
 .ui-term { text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 3px; cursor: help; }
+
+/* Motion shared by components. Things arrive only while the page is being opened (the root
+   carries data-enter, set by lib/motion.js), so a live redraw doesn't replay them. --i staggers
+   siblings: delay = min(--i, 14) × --motion-stagger. --i doesn't inherit, so a nested sheet
+   doesn't pick up its parent's place. */
+@property --i { syntax: "<number>"; inherits: false; initial-value: 0; }
+@keyframes ui-rise { from { opacity: 0; translate: 0 var(--motion-rise); } }
+@keyframes ui-drop { from { opacity: 0; translate: 0 var(--motion-drop); scale: var(--motion-pop); } }
+@keyframes ui-fade { from { opacity: 0; } }
+
+/* The page itself: a page change crossfades the desk (View Transitions); the topbar stays put.
+   A live redraw is a shorter crossfade, so an open page updates without a flash. */
+::view-transition-group(root) { animation-duration: var(--motion-base); }
+::view-transition-old(root) { animation: var(--motion-base) var(--ease-in) both ui-vt-out; }
+::view-transition-new(root) { animation: var(--motion-base) var(--ease-out) both ui-fade; }
+:root[data-vt="refresh"]::view-transition-old(root) { animation: var(--motion-fast) linear both ui-vt-out; }
+:root[data-vt="refresh"]::view-transition-new(root) { animation: var(--motion-fast) linear both ui-fade; }
+@keyframes ui-vt-out { to { opacity: 0; } }
+
+main > :nth-child(2) { --i: 1; } main > :nth-child(3) { --i: 2; } main > :nth-child(4) { --i: 3; }
+main > :nth-child(5) { --i: 4; } main > :nth-child(n+6) { --i: 5; }
+:root[data-enter] .ui-foot { animation: var(--motion-slow) var(--ease-out) calc(min(var(--i), 14) * var(--motion-stagger)) backwards ui-fade; }

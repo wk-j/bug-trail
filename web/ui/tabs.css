@@ -1,17 +1,38 @@
-/* Tabs: manila index tabs standing on a shelf; the chosen one is raised and joins the shelf. */
-.ui-tabs { display: flex; align-items: flex-end; gap: 4px; flex-wrap: wrap; border-bottom: 2px solid var(--manila-edge); padding-left: 4px; }
+/* Tabs: manila index tabs standing on a shelf; the chosen one is raised and joins the shelf.
+   Every tab is the same height; the others sit lower, their feet hidden behind the shelf, so
+   choosing a tab slides it up (a transform) instead of changing its size. */
+.ui-tabs {
+  position: relative; display: flex; align-items: flex-end; gap: 4px; flex-wrap: wrap; padding-left: 4px;
+  clip-path: inset(-16px -16px 0 -16px);  /* nothing shows below the shelf */
+}
+.ui-tabs::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; z-index: 1; pointer-events: none;
+  background: var(--manila-edge);
+}
 .ui-tabs__label { align-self: center; margin-right: 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 .ui-tab {
-  position: relative; bottom: -2px; cursor: pointer; padding: 6px 14px 5px; font-size: 13px; color: var(--ink-2);
+  --down: 4px;
+  position: relative; z-index: 0; cursor: pointer; padding: 9px 14px 7px; font-size: 13px; color: var(--ink-2);
   border: 1px solid var(--manila-edge); border-bottom: 0; border-radius: 9px 9px 0 0;
   background: linear-gradient(180deg, #ead6a2, var(--manila-2));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45);
-  transition: transform .1s;
+  transform: translateY(var(--down));
+  transition: transform var(--motion-base) var(--ease-out), color var(--motion-base), box-shadow var(--motion-base);
 }
-.ui-tab:hover { background: linear-gradient(180deg, #f1e0b5, #e6cf98); }
+/* The face brightens under the pointer (an overlay, so it fades). */
+.ui-tab::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: linear-gradient(180deg, rgba(255, 250, 230, .7), rgba(255, 250, 230, .2));
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+.ui-tab:hover::before { opacity: 1; }
+.ui-tab:hover:not(.is-active) { --down: 3px; }
+@media (prefers-reduced-motion: reduce) { .ui-tab:hover:not(.is-active) { --down: 4px; } }
 .ui-tab.is-active {
-  padding-top: 9px; color: var(--ink); font-weight: 700; z-index: 1;
+  --down: 0px;
+  color: var(--ink); font-weight: 700; z-index: 2;
   background: linear-gradient(180deg, #f7ebc8, var(--manila));
   border-bottom: 2px solid var(--manila); box-shadow: 0 -2px 4px rgba(0, 0, 0, .12), inset 0 1px 0 rgba(255, 255, 255, .6);
 }
+.ui-tab.is-active::before { display: none; }
 .ui-tab code { background: none; box-shadow: none; padding: 0; }

@@ -70,6 +70,24 @@
   --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, .28);
   --bevel: inset 0 1px 0 rgba(255, 255, 255, .75), inset 0 -1px 0 rgba(0, 0, 0, .12);
 
+  /* motion: short and quiet, like paper settling on a desk. Durations and easings are used by
+     every component; distances are zeroed for reduced motion so only fades remain. */
+  --motion-fast: 120ms;    /* hover, press, highlight */
+  --motion-base: 200ms;    /* tabs, focus, crossfades, things leaving */
+  --motion-slow: 280ms;    /* things arriving: sheets, cards, notes, yarn */
+  --motion-stagger: 26ms;  /* between siblings arriving one after another */
+  --ease-out: cubic-bezier(.2, .7, .3, 1);
+  --ease-in: cubic-bezier(.5, 0, .8, .4);
+  --ease-in-out: cubic-bezier(.45, 0, .25, 1);
+  --ease-settle: cubic-bezier(.3, 1.3, .55, 1);  /* lands with the slightest give */
+  --motion-rise: 8px;      /* a sheet slid onto the desk comes up from just below */
+  --motion-drop: -5px;     /* a note pressed onto the cork comes down from just above */
+  --motion-pop: 1.04;      /* ...and a touch larger, as if held off the board */
+  --motion-slide: 28px;    /* a drawer sliding in from the side */
+  --motion-lift: -3px;     /* pointing at a folder or card lifts it */
+  --motion-nudge: -1px;    /* pointing at a small thing lifts it a little */
+  --motion-select: 1.03;   /* the chosen note stands proud of the board */
+
   --radius: 6px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
@@ -103,6 +121,21 @@
   --lane-resolution: #2a7a2e;
   --lane-verified: #1d7c7c;
 }
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-slow: var(--motion-base);
+    --motion-stagger: 0ms;
+    --ease-settle: var(--ease-out);
+    --motion-rise: 0px;
+    --motion-drop: 0px;
+    --motion-pop: 1;
+    --motion-slide: 0px;
+    --motion-lift: 0px;
+    --motion-nudge: 0px;
+    --motion-select: 1;
+  }
+}
+
 .lane-reported { --lane: var(--lane-reported); }
 .lane-observed { --lane: var(--lane-observed); }
 .lane-investigated { --lane: var(--lane-investigated); }

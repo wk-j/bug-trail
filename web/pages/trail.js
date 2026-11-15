@@ -4,7 +4,8 @@ import { esc, inline, richText, human, fmtDate, fmtDateTime, getJSON } from '/li
 import { normalizeFlow, locLabel, ROLE_TAG, STATUS_TONE, SEVERITY_TONE, NODE_TONE } from '/lib/model.js';
 import { store, activeCase, computeBugPath, caseWorks } from '/lib/store.js';
 import { setGlossary, linkTerms } from '/lib/glossary.js';
-import { drawBoard, focusStep, markSelected } from '/map/board.js';
+import { drawBoard, applyCase, focusStep, markSelected } from '/map/board.js';
+import { now, scrollBehavior } from '/lib/motion.js';
 import { Folder } from '/ui/folder.js';
 import { Stamp } from '/ui/stamp.js';
 import { Tag, Meter } from '/ui/tag.js';
@@ -12,25 +13,35 @@ import { Sheet } from '/ui/sheet.js';
 import { CorkBoard } from '/ui/corkboard.js';
 import { Button } from '/ui/button.js';
 import { Legend } from '/ui/legend.js';
-import { Tabs } from '/ui/tabs.js';
+import { Tabs, selectTab } from '/ui/tabs.js';
 import { Verdict } from '/ui/verdict.js';
 import { Timeline } from '/ui/timeline.js';
 import { TermCards } from '/ui/term-cards.js';
 import { Notice } from '/ui/notice.js';
 import { CodeBlock, CodePath } from '/ui/code-block.js';
-import { Clipboard, mountClipboard } from '/ui/clipboard.js';
+import { Clipboard, mountClipboard, showClipboard, hideClipboard } from '/ui/clipboard.js';
 
 const clipboard = mountClipboard();
 
 // ---------- page ----------
 
-export async function renderTrail(app, fresh) {
+/**
+ * Fetch the trail in store.view and draw it. fresh: the page is being opened (scroll to the
+ * selection) rather than redrawn in place. commit(update) puts it up (lib/motion.js).
+ */
+export async function renderTrail(app, { fresh = true, commit = now } = {}) {
   const { view } = store;
   let data;
   try { data = await getJSON(`/api/trails/${encodeURIComponent(view.id)}`); } catch (e) {
-    app.innerHTML = Sheet({ title: 'Trail not found', tape: true, body: `<p>${esc(e.message)}</p><p><a href="#/">← All trails</a></p>` });
-    return;
+    return commit(() => {
+      app.innerHTML = Sheet({ title: 'Trail not found', tape: true, body: `<p>${esc(e.message)}</p><p><a href="#/">← All trails</a></p>` });
+    });
   }
+  return commit(() => { if (store.view === view) paint(app, data, fresh); });
+}
+
+function paint(app, data, fresh) {
+  const { view } = store;
   const { validation } = data;
   const trail = store.trail = data.trail;
   if (!trail || typeof trail !== 'object') {
@@ -150,26 +161,29 @@ function board(flow) {
   });
   return CorkBoard({
     title: 'Code flow', sub: flow.title ? inline(flow.title) : '', tools,
-    strip: `${legend}<div id="casebar">${caseBar()}</div>`,
+    strip: `${legend}${caseTabs()}`,
     body: '<div class="flow" id="flow"></div>',
   });
 }
 
-function caseBar() {
+function caseTabs() {
   const { flow } = store;
   if (!flow.cases.length) return '';
+  const c = activeCase();
+  return `${Tabs({ label: 'Case', items: flow.cases.map((x, i) => ({ html: inline(x.title), active: x === c, attrs: { 'data-case': String(i) } })) })}
+    <div class="case-strip" id="casestrip">${caseStrip()}</div>`;
+}
+
+function caseStrip() {
   const c = activeCase();
   const works = caseWorks(c);
   const input = c.input && typeof c.input === 'object'
     ? Object.entries(c.input).map(([k, v]) => Tag({ variant: 'paper', html: `<code>${esc(k)}</code> ${v === '' || v === null ? '<i>empty</i>' : `<code>${esc(v)}</code>`}` })).join('')
     : '';
   return `
-    ${Tabs({ label: 'Case', items: flow.cases.map((x, i) => ({ html: inline(x.title), active: x === c, attrs: { 'data-case': String(i) } })) })}
-    <div class="case-strip">
       ${input ? `<div class="ui-row"><span class="case-strip__lbl">Input</span>${input}</div>` : ''}
       ${Verdict({ label: 'Should', tone: 'ok', html: inline(c.should) })}
-      ${Verdict({ label: works ? 'Does (same)' : 'Does now', tone: works ? 'ok' : 'bad', html: inline(c.does) })}
-    </div>`;
+      ${Verdict({ label: works ? 'Does (same)' : 'Does now', tone: works ? 'ok' : 'bad', html: inline(c.does) })}`;
 }
 
 function investigation(issue, nodes) {
@@ -213,7 +227,7 @@ export function select(id, scroll = true) {
   if (location.hash !== hash) history.replaceState(null, '', hash);
   renderClipboard();
   const el = markSelected();
-  if (el && scroll) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  if (el && scroll) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: scrollBehavior() });
   focusStep(stepById.has(view.selected) ? view.selected : null);
   updateFollow();
 }
@@ -240,9 +254,9 @@ function updateFollow() {
   next.disabled = i === path.length - 1;
 }
 
-export function closeClipboard() {
-  clipboard.hidden = true;
-  clipboard.innerHTML = '';
+/** Take the details away; `now` skips the motion (leaving the page). */
+export function closeClipboard(now = false) {
+  hideClipboard(clipboard, now);
 }
 
 function renderClipboard() {
@@ -250,10 +264,8 @@ function renderClipboard() {
   const s = view?.selected && stepById.get(view.selected);
   const n = view?.selected && !s && nodeById.get(view.selected);
   if (!s && !n) { closeClipboard(); return; }
-  clipboard.hidden = false;
-  clipboard.innerHTML = s ? stepSheet(s) : nodeSheet(n);
+  showClipboard(clipboard, s ? stepSheet(s) : nodeSheet(n), view.selected);
   linkTerms(clipboard);
-  clipboard.querySelector('.ui-clipboard__sheet').scrollTop = 0;
 }
 
 const closeBtn = () => Button({ label: '✕', variant: 'key', attrs: { 'data-close': '', 'aria-label': 'Close details' } });
@@ -315,13 +327,17 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#prev')) return followBug(-1);
   const cb = e.target.closest('[data-case]');
   if (cb) {
+    // Switch case in place, so the tab slides up and the board's notes and yarn fade over.
+    if (cb.classList.contains('is-active')) return;
     view.caseIdx = Number(cb.dataset.case);
     const c = activeCase();
     if (view.selected && stepById.has(view.selected) && !c.correct.includes(view.selected) && !c.bug.includes(view.selected)) view.selected = null;
-    document.getElementById('casebar').innerHTML = caseBar();
-    linkTerms(document.getElementById('casebar'));
+    selectTab(cb);
+    const strip = document.getElementById('casestrip');
+    strip.innerHTML = caseStrip();
+    linkTerms(strip);
     computeBugPath();
-    drawBoard(document.getElementById('flow'));
+    applyCase(document.getElementById('flow'));
     return select(view.selected, false);
   }
   const f = e.target.closest('[data-follow]');

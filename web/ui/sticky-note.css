@@ -6,9 +6,11 @@
   background: linear-gradient(175deg, color-mix(in srgb, var(--note-c) 70%, #fff) 0%, var(--note-c) 30%, color-mix(in srgb, var(--note-c) 88%, #8a6a2a) 100%);
   box-shadow: var(--shadow-note);
   transform: rotate(var(--tilt, 0deg));
-  cursor: pointer; transition: opacity .15s, box-shadow .15s, transform .15s;
+  cursor: pointer;
+  transition: opacity var(--motion-base) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out), scale var(--motion-base) var(--ease-settle);
 }
-.ui-note:hover { box-shadow: 0 2px 3px rgba(0, 0, 0, .2), 4px 10px 14px rgba(0, 0, 0, .25); transform: rotate(0deg) translateY(-1px); }
+.ui-note:hover { box-shadow: 0 2px 3px rgba(0, 0, 0, .2), 4px 10px 14px rgba(0, 0, 0, .25); transform: rotate(0deg) translateY(var(--motion-nudge)); }
 /* Curled corner */
 .ui-note::after {
   content: ""; position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; border-radius: 0 0 10px 0;
@@ -42,6 +44,9 @@
 .ui-note--blue { border: 1.5px dashed rgba(59, 103, 168, .6); }
 
 /* States */
-.ui-note.sel { box-shadow: 0 0 0 3px rgba(43, 76, 155, .8), var(--shadow-note); transform: rotate(0deg) scale(1.03); z-index: 5; }
+.ui-note.sel { box-shadow: 0 0 0 3px rgba(43, 76, 155, .8), var(--shadow-note); transform: rotate(0deg); scale: var(--motion-select); z-index: 5; }
 .ui-note.off { opacity: .2; }
 .flow.focus .ui-note:not(.hl) { opacity: .28; }
+
+/* Arriving: stuck onto the board from just above, after the card it belongs to. */
+:root[data-enter] .ui-note { animation: var(--motion-slow) var(--ease-settle) calc(min(var(--i), 14) * var(--motion-stagger)) backwards ui-drop; }
