@@ -13,6 +13,10 @@ Bug Trail is a single Go binary with two jobs:
    Bug Trail never calls an AI model itself; the agent writes the trail file.
 2. **It runs the dashboard** that draws each trail, locally or as a shared server.
 
+![Bug Trail dashboard: the list of trails, then the cli/cli#14394 trail's evidence board, with Follow the bug stepping along the red yarn from component to component while the clipboard shows each step's file, line and code](docs/media/bug-trail-demo.gif)
+
+<sub>Recorded from `bug-trail serve --dir examples`. Also available as an [MP4](docs/media/bug-trail-demo.mp4).</sub>
+
 ## Requirements
 
 Homebrew (macOS or Linux), or Go 1.24 or later to build from source; no other dependencies.
