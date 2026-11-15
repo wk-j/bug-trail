@@ -18,6 +18,7 @@ web/                 the dashboard
   ui/                reusable components, one module and one stylesheet each, on tokens.css
   map/board.js       lays out and draws the code-flow map from ui components
   pages/             the list and trail pages, composed from components
+e2e/                 end-to-end cases: build the binary, drive the CLI and HTTP (see e2e/README.md)
 examples/            a fictional trail and a real one (cli/cli#14394) written by the skill
 docs/                these pages
 ```
@@ -37,6 +38,12 @@ docs/                these pages
 
 ```bash
 go vet ./... && go test ./... && go run . validate examples/*.json
+```
+
+End-to-end cases (build the binary, run `serve`, drive `push` and the API):
+
+```bash
+go run ./e2e run serve-and-push && go run ./e2e run cli-commands
 ```
 
 To look at the examples in the dashboard:
