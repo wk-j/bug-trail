@@ -1,0 +1,4 @@
+version = 1
+name = "bug-trail"
+adapter = ["go", "run", "./e2e"]
+history = true

@@ -1,0 +1,173 @@
+# System map of the e2e cases: the bug-trail CLI, the server it talks to, and
+# the trails folder. Each check names the node it proves with `at`.
+version = 1
+direction = "LR"
+
+[[group]]
+id = "cli"
+label = "bug-trail CLI"
+
+[[group]]
+id = "server"
+label = "bug-trail serve"
+
+[[node]]
+id = "agent"
+label = "agent / user"
+shape = "actor"
+
+[[node]]
+id = "cli-validate"
+label = "validate"
+group = "cli"
+source = "main.go"
+
+[[node]]
+id = "cli-push"
+label = "push\nvalidates, then PUT"
+group = "cli"
+source = "main.go"
+
+[[node]]
+id = "cli-config"
+label = "config\n~/.config/bug-trail"
+group = "cli"
+source = "configcmd.go"
+
+[[node]]
+id = "cli-skill"
+label = "skill show"
+group = "cli"
+source = "skillcmd.go"
+
+[[node]]
+id = "format"
+label = "internal/format\nvalidator"
+source = "internal/format/format.go"
+
+[[node]]
+id = "serve"
+label = "serve\nGET /healthz"
+group = "server"
+source = "internal/server/server.go"
+
+[[node]]
+id = "auth"
+label = "bearer token"
+group = "server"
+shape = "gate"
+
+[[node]]
+id = "api-put"
+label = "PUT /api/trails/{id}"
+group = "server"
+
+[[node]]
+id = "api-delete"
+label = "DELETE /api/trails/{id}"
+group = "server"
+
+[[node]]
+id = "api-list"
+label = "GET /api/trails"
+group = "server"
+
+[[node]]
+id = "api-get"
+label = "GET /api/trails/{id}"
+group = "server"
+
+[[node]]
+id = "events"
+label = "GET /events\nfolder watcher"
+group = "server"
+
+[[node]]
+id = "dashboard"
+label = "GET /\nweb/"
+group = "server"
+source = "web/index.html"
+
+[[node]]
+id = "format-js"
+label = "GET /format.js"
+group = "server"
+
+[[node]]
+id = "store"
+label = "trails folder"
+shape = "store"
+
+[[edge]]
+from = "agent"
+to = "cli-push"
+
+[[edge]]
+from = "agent"
+to = "cli-validate"
+
+[[edge]]
+from = "agent"
+to = "cli-config"
+
+[[edge]]
+from = "agent"
+to = "cli-skill"
+
+[[edge]]
+from = "cli-validate"
+to = "format"
+
+[[edge]]
+from = "cli-push"
+to = "format"
+
+[[edge]]
+from = "cli-push"
+to = "auth"
+label = "Bearer"
+
+[[edge]]
+from = "auth"
+to = "api-put"
+
+[[edge]]
+from = "auth"
+to = "api-delete"
+
+[[edge]]
+from = "api-put"
+to = "format"
+
+[[edge]]
+from = "api-put"
+to = "store"
+label = "write"
+
+[[edge]]
+from = "api-delete"
+to = "store"
+
+[[edge]]
+from = "store"
+to = "api-list"
+kind = "reply"
+
+[[edge]]
+from = "store"
+to = "api-get"
+kind = "reply"
+
+[[edge]]
+from = "store"
+to = "events"
+label = "change"
+
+[[edge]]
+from = "format-js"
+to = "dashboard"
+
+[[edge]]
+from = "events"
+to = "dashboard"
+label = "reload"
