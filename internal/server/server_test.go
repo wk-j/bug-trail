@@ -180,3 +180,30 @@ func TestUploads(t *testing.T) {
 		t.Fatalf("healthz: want 200, got %d", c)
 	}
 }
+
+func TestListNewestFirst(t *testing.T) {
+	dir := t.TempDir()
+	raw, err := os.ReadFile("../../examples/example__photo-sync__142.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Each file keeps the example's analyzed_at; only the write time says which is newest.
+	base := time.Now().Add(-time.Hour)
+	for i, id := range []string{"old", "newest", "middle"} {
+		p := filepath.Join(dir, id+".json")
+		if err := os.WriteFile(p, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		at := base.Add(map[int]time.Duration{0: 0, 1: 20 * time.Minute, 2: 10 * time.Minute}[i])
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []string
+	for _, s := range (&Server{Dir: dir}).listTrails() {
+		got = append(got, s.ID)
+	}
+	if strings.Join(got, ",") != "newest,middle,old" {
+		t.Fatalf("want newest,middle,old, got %v", got)
+	}
+}
