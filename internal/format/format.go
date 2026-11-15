@@ -99,15 +99,40 @@ func isStr(v any) bool {
 }
 
 func isDate(v any) bool {
+	_, _, ok := parseDate(v)
+	return ok
+}
+
+// parseDate parses an ISO 8601 date or date-time. zoned is false when the value has no offset,
+// in which case it was read as UTC but may really be local time.
+func parseDate(v any) (t time.Time, zoned, ok bool) {
 	if !isStr(v) {
-		return false
+		return time.Time{}, false, false
 	}
-	for _, l := range dateLayouts {
-		if _, err := time.Parse(l, v.(string)); err == nil {
-			return true
+	for i, l := range dateLayouts {
+		if t, err := time.Parse(l, v.(string)); err == nil {
+			return t, i == 0, true
 		}
 	}
-	return false
+	return time.Time{}, false, false
+}
+
+// now is the clock Validate compares analyzed_at against; tests replace it.
+var now = time.Now
+
+// inFuture reports whether an analyzed_at value is later than now. Values without an offset
+// may be local time, so they get up to 14 hours (the largest UTC offset) of slack; zoned values
+// get a few minutes for clock skew.
+func inFuture(v any) bool {
+	t, zoned, ok := parseDate(v)
+	if !ok {
+		return false
+	}
+	slack := 14 * time.Hour
+	if zoned {
+		slack = 5 * time.Minute
+	}
+	return t.After(now().Add(slack))
 }
 
 func isURL(v any) bool { return isStr(v) && urlRE.MatchString(v.(string)) }
@@ -157,6 +182,8 @@ func Validate(v any) Result {
 	}
 	if !isDate(t["analyzed_at"]) {
 		errf("analyzed_at must be an ISO 8601 date-time")
+	} else if inFuture(t["analyzed_at"]) {
+		warnf("analyzed_at %v is in the future; set it from `date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ`", t["analyzed_at"])
 	}
 	if t["language"] != nil && (!isStr(t["language"]) || !langRE.MatchString(t["language"].(string))) {
 		errf(`language must be a language tag such as "th" or "en"`)

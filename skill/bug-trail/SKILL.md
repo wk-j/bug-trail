@@ -97,6 +97,14 @@ patterns (`grep -rn "store(" --include='*.go'`).
 Follow the bug-trail/v2 format, printed after this guide by `bug-trail skill show`. The rules that
 matter most:
 
+- **Stamp the real time.** Set `analyzed_at` to the current UTC time from the shell, run right
+  before you write the file:
+  ```bash
+  date -u +%Y-%m-%dT%H:%M:%SZ
+  ```
+  Paste its output as is. Never copy the example's date or guess one: the dashboard shows this
+  value as "analyzed …", and the validator warns when it is in the future.
+
 - **Write in the issue's language** (or the one the user asks for), and set `language` to its
   tag, such as `"th"`. That covers titles, details, background, cases and next steps. Keep code
   names, field names, file paths, enum values and error messages exactly as they are in the code,

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExamplesAreValid(t *testing.T) {
@@ -127,6 +128,31 @@ func TestV1StillLoads(t *testing.T) {
 	r := Validate(m)
 	if len(r.Errors) != 0 || !strings.Contains(strings.Join(r.Warnings, "\n"), "no code flow") {
 		t.Fatalf("v1: errors=%v warnings=%v", r.Errors, r.Warnings)
+	}
+}
+
+func TestAnalyzedAtInFuture(t *testing.T) {
+	defer func(f func() time.Time) { now = f }(now)
+	now = func() time.Time { return time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC) }
+	for _, c := range []struct {
+		at   string
+		warn bool
+	}{
+		{"2026-11-14T09:00:00Z", false},
+		{"2026-11-14T10:03:00Z", false},      // clock skew
+		{"2026-11-14T12:00:00Z", true},       // hours ahead
+		{"2026-11-14T16:00:00+07:00", false}, // 09:00 UTC
+		{"2026-11-14T20:00:00", false},       // no offset: may be local time
+		{"2026-11-15", false},                // the date in a timezone ahead of UTC
+		{"2026-11-16", true},
+	} {
+		m := minimal()
+		m["analyzed_at"] = c.at
+		r := Validate(m)
+		got := strings.Contains(strings.Join(r.Warnings, "\n"), "in the future")
+		if got != c.warn || len(r.Errors) != 0 {
+			t.Errorf("%s: warn=%v want %v (errors=%v)", c.at, got, c.warn, r.Errors)
+		}
 	}
 }
 
