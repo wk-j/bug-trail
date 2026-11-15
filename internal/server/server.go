@@ -105,13 +105,9 @@ func (s *Server) listTrails() []trailSummary {
 		}
 		out = append(out, sum)
 	}
-	key := func(t trailSummary) string {
-		if a, ok := t.AnalyzedAt.(string); ok {
-			return a
-		}
-		return t.Mtime
-	}
-	sort.SliceStable(out, func(i, j int) bool { return key(out[i]) > key(out[j]) })
+	// Newest first, by when the file was last written. analyzed_at is written by the
+	// agent and is often a guess, so it can't be trusted to order the list.
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Mtime > out[j].Mtime })
 	return out
 }
 
