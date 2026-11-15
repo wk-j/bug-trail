@@ -9,7 +9,7 @@ the map. `nodes` and `edges` record the investigation around it.
 | Field            | Type            | Required | Notes |
 |------------------|-----------------|----------|-------|
 | `format`         | `"bug-trail/v2"`| yes      | v1 files (no `flow`) still load, with a warning. |
-| `analyzed_at`    | ISO date-time   | yes      | When you wrote the analysis. |
+| `analyzed_at`    | ISO date-time   | yes      | When you wrote the analysis, in UTC: the output of `date -u +%Y-%m-%dT%H:%M:%SZ`, never a made-up value. Warned if in the future. |
 | `language`       | string          | no       | Language of the trail's text, such as `"th"` or `"en"` (default). |
 | `analyzed_by`    | string          | no       | Agent and model, for example `"Claude Code (claude-opus-5-5)"`. |
 | `issue`          | object          | yes      | See below. |
@@ -202,10 +202,12 @@ Which kind fits:
 
 ## Minimal complete example
 
+Replace the `analyzed_at` placeholder with the real output of `date -u +%Y-%m-%dT%H:%M:%SZ`.
+
 ```json
 {
   "format": "bug-trail/v2",
-  "analyzed_at": "2026-11-14T09:00:00Z",
+  "analyzed_at": "<output of date -u +%Y-%m-%dT%H:%M:%SZ>",
   "analyzed_by": "Claude Code (claude-opus-5-5)",
   "issue": { "url": "https://github.com/o/r/issues/1", "repo": "o/r", "number": 1,
              "title": "Crash on save", "state": "closed" },
