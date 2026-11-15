@@ -39,6 +39,17 @@ write to `wk-j/bug-trail`, so GoReleaser needs a second token to push the cask t
 Renew the token before it expires; a release with an expired token publishes the GitHub release
 but fails to update the cask.
 
+### Without the token
+
+If `HOMEBREW_TAP_GITHUB_TOKEN` isn't set, the workflow still publishes the GitHub release but
+skips the push to the tap. It uploads the generated cask as the `homebrew-cask` artifact of the
+run; push it by hand from a clone of the tap:
+
+```bash
+gh run download <run-id> -R wk-j/bug-trail -n homebrew-cask -D ../homebrew-tap/Casks
+cd ../homebrew-tap && git add Casks/bug-trail.rb && git commit -m "bug-trail 0.3.0" && git push
+```
+
 ## Cut a release
 
 1. Set `version` in `main.go` to the new version (it is what a plain `go build` reports).
@@ -61,4 +72,5 @@ goreleaser check                       # validate .goreleaser.yaml
 goreleaser release --snapshot --clean  # build everything into dist/ without publishing
 ```
 
-`dist/` is ignored by git.
+`dist/` is ignored by git. A pull request that changes `.goreleaser.yaml` or the workflow runs
+`goreleaser check` and the same snapshot build in CI.
