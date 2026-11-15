@@ -1,0 +1,73 @@
+# Release config: builds bug-trail for macOS and Linux, publishes a GitHub release, and updates
+# the Homebrew cask in wk-j/homebrew-tap. Runs from .github/workflows/release.yml on a v* tag.
+# See docs/releasing.md.
+version: 2
+
+project_name: bug-trail
+
+before:
+  hooks:
+    - go vet ./...
+    - go test ./...
+
+builds:
+  - id: bug-trail
+    binary: bug-trail
+    main: .
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    # Same ldflags as the Dockerfile: the tag's version is what `bug-trail version` prints.
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: bug-trail
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+homebrew_casks:
+  - name: bug-trail
+    binaries: [bug-trail]
+    homepage: https://github.com/wk-j/bug-trail
+    description: See which part of the code causes a bug, drawn as a code-flow map
+    caveats: |
+      Install the bug-trail skill into the coding agents on this machine with:
+        bug-trail skill setup
+    repository:
+      owner: wk-j
+      name: homebrew-tap
+      branch: main
+      # A token that can push to wk-j/homebrew-tap; the workflow's own GITHUB_TOKEN cannot.
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "bug-trail {{ .Tag }}"
+    # The binary isn't notarized, so drop the quarantine flag or Gatekeeper refuses to run it.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bug-trail"]
+          end

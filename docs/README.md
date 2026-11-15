@@ -8,4 +8,5 @@
 | [Configuration](configuration.md) | The config file, its keys, and how values are chosen |
 | [Deploy a shared server](deploy.md) | Docker Compose, connecting agents, security, the HTTP API |
 | [Development](development.md) | Repository layout, UI components, checks |
+| [Releasing](releasing.md) | Install with Homebrew, cut a release, one-time tap setup |
 | [Trail format](../skill/bug-trail/FORMAT.md) | The `bug-trail/v2` JSON format agents write |
