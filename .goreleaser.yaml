@@ -58,8 +58,11 @@ homebrew_casks:
       name: homebrew-tap
       branch: main
       # A token that can push to wk-j/homebrew-tap; the workflow's own GITHUB_TOKEN cannot.
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
     directory: Casks
+    # Without the token, only write the cask to dist/homebrew/Casks/ (the workflow uploads it as
+    # an artifact) so it can be pushed to the tap by hand. See docs/releasing.md.
+    skip_upload: '{{ if not (envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "") }}true{{ end }}'
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
@@ -67,7 +70,7 @@ homebrew_casks:
     # The binary isn't notarized, so drop the quarantine flag or Gatekeeper refuses to run it.
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bug-trail"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/bug-trail"]
           end

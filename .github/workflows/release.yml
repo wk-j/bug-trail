@@ -2,10 +2,16 @@ name: release
 
 # Push a tag such as v0.3.0 to build the binaries, publish the GitHub release and update the
 # Homebrew cask in wk-j/homebrew-tap. See docs/releasing.md.
+# A pull request that touches the release setup gets a snapshot build instead, which publishes
+# nothing.
 on:
   push:
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - .goreleaser.yaml
+      - .github/workflows/release.yml
 
 permissions:
   contents: write
@@ -22,11 +28,24 @@ jobs:
           go-version-file: go.mod
       - name: Validate examples
         run: go run . validate examples/*.json
+      - name: Check config
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: check
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          args: ${{ github.event_name == 'pull_request' && 'release --snapshot --clean' || 'release --clean' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      # The generated cask, for pushing to wk-j/homebrew-tap by hand when the token isn't set.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: homebrew-cask
+          path: dist/homebrew/Casks/*.rb
+          if-no-files-found: ignore
